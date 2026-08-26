@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuration for HabitLockAccessibilityService.
+
+  We deliberately request the bare minimum. The service only needs to know which app
+  moved to the foreground, which arrives as the package name on the event itself, so
+  canRetrieveWindowContent is false: we never read screen text, and asking for it would
+  be an unjustified privacy ask that reviewers and users would rightly object to.
+
+  Note there is no android:isAccessibilityTool here. This app is a self-control tool,
+  not an accessibility aid, and falsely declaring otherwise trips Play Protect's
+  "Deceptive Accessibility Tool" warning. The description below explains the real
+  purpose to the user instead.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_service_description" />

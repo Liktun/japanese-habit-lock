@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Required to list the apps the user can choose to block. Android 11+ hides the
+      installed-app list behind this permission. We only read package names and labels
+      for the picker; nothing is transmitted anywhere.
+    -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
@@ -17,6 +27,41 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          The interstitial shown over a blocked app.
+
+          excludeFromRecents + noHistory: the blocker should never linger in the recents
+          list or be reachable by back-navigation once dismissed. singleTask so repeated
+          blocks reuse the one instance instead of stacking.
+        -->
+        <activity
+            android:name=".ui.blocker.BlockerActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=".blocker"
+            android:theme="@style/Theme.JapaneseHabitLock" />
+
+        <!--
+          NOTE: android:isAccessibilityTool is deliberately NOT set. This app is a habit
+          gate, not an assistive tool for users with disabilities. Claiming that attribute
+          falsely triggers Google Play Protect's "Deceptive Accessibility Tool" warning.
+          Disclosure is handled in-app on the settings screen instead.
+        -->
+        <service
+            android:name=".service.HabitLockAccessibilityService"
+            android:exported="false"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
     </application>
 
 </manifest>

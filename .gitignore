@@ -17,3 +17,6 @@ local.properties
 /toolchain
 *.log
 .idea/
+
+# Plans are working notes, not shipped artifacts.
+.hermes/

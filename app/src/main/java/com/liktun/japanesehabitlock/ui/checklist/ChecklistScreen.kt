@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -43,7 +44,11 @@ import java.time.format.DateTimeFormatter
 private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
 
 @Composable
-fun ChecklistScreen(modifier: Modifier = Modifier) {
+fun ChecklistScreen(
+  modifier: Modifier = Modifier,
+  serviceEnabled: Boolean = true,
+  onOpenSettings: () -> Unit = {},
+) {
   // applicationContext, not the Activity: the DataStore outlives this screen.
   val appContext = LocalContext.current.applicationContext
   val viewModel: ChecklistViewModel = viewModel {
@@ -64,6 +69,8 @@ fun ChecklistScreen(modifier: Modifier = Modifier) {
         checklist = current.checklist,
         onToggleTask = viewModel::setTaskCompleted,
         onAdvancePhase = viewModel::advanceTo,
+        serviceEnabled = serviceEnabled,
+        onOpenSettings = onOpenSettings,
         modifier = modifier,
       )
   }
@@ -75,9 +82,15 @@ internal fun ChecklistContent(
   onToggleTask: (String, Boolean) -> Unit,
   onAdvancePhase: (Phase) -> Unit,
   modifier: Modifier = Modifier,
+  serviceEnabled: Boolean = true,
+  onOpenSettings: () -> Unit = {},
 ) {
   LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    item { Header(checklist) }
+    item { Header(checklist, onOpenSettings) }
+
+    if (!serviceEnabled) {
+      item { SetupBanner(onOpenSettings) }
+    }
 
     item { GateBanner(checklist) }
 
@@ -115,19 +128,55 @@ private fun androidx.compose.foundation.lazy.LazyListScope.items(
 }
 
 @Composable
-private fun Header(checklist: DailyChecklist) {
-  Column {
-    Text(
-      text = checklist.phase.label,
-      style = MaterialTheme.typography.titleLarge,
-      fontWeight = FontWeight.Bold,
-    )
-    Spacer(Modifier.height(2.dp))
-    Text(
-      text = "Week ${checklist.weekNumber}  ·  ${checklist.day.date.format(DAY_FORMAT)}",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun Header(checklist: DailyChecklist, onOpenSettings: () -> Unit) {
+  Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.weight(1f)) {
+      Text(
+        text = checklist.phase.label,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+      )
+      Spacer(Modifier.height(2.dp))
+      Text(
+        text = "Week ${checklist.weekNumber}  ·  ${checklist.day.date.format(DAY_FORMAT)}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+    TextButton(onClick = onOpenSettings) { Text("Apps") }
+  }
+}
+
+/**
+ * Shown until the accessibility service is switched on.
+ *
+ * Without the service the checklist still works but nothing is actually blocked, which
+ * would be a silent, invisible failure — so it is called out loudly rather than left
+ * for the user to discover when a "blocked" app opens normally.
+ */
+@Composable
+private fun SetupBanner(onOpenSettings: () -> Unit) {
+  Surface(
+    color = MaterialTheme.colorScheme.tertiaryContainer,
+    shape = RoundedCornerShape(16.dp),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Column(Modifier.padding(16.dp)) {
+      Text(
+        text = "Blocking is off",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onTertiaryContainer,
+      )
+      Spacer(Modifier.height(4.dp))
+      Text(
+        text = "Your checklist works, but no apps are actually blocked yet. Pick your apps and turn on blocking.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onTertiaryContainer,
+      )
+      Spacer(Modifier.height(12.dp))
+      OutlinedButton(onClick = onOpenSettings) { Text("Set up blocking") }
+    }
   }
 }
 

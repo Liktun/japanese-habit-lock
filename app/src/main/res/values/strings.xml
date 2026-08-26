@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Japanese Habit Lock</string>
+    <string name="accessibility_service_label">Japanese Habit Lock blocking</string>
 </resources>

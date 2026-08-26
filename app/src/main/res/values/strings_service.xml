@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Kept in its own file so the accessibility service description stays next to the
+  service that uses it and does not collide with the app's general strings.
+-->
+<resources>
+    <string name="accessibility_service_description">Japanese Habit Lock watches only which app is in the foreground. If you open an app you chose to block before finishing today\'s Japanese checklist, it shows a reminder screen instead. It never reads the contents of your screen, and Settings, your home screen and the phone app are always allowed.</string>
+</resources>
