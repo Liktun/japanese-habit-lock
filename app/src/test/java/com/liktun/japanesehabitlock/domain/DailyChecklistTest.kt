@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.domain
+package com.liktun.japanesehabitlock.domain
 
 import java.time.LocalDate
 import org.junit.Assert.assertEquals

@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.domain
+package com.liktun.japanesehabitlock.domain
 
 /**
  * Everything the checklist screen needs for one study day, and the gate decision

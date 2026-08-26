@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.data
+package com.liktun.japanesehabitlock.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -6,11 +6,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.example.japanesehabitlock.domain.DailyChecklist
-import com.example.japanesehabitlock.domain.Phase
-import com.example.japanesehabitlock.domain.Roadmap
-import com.example.japanesehabitlock.domain.StudyDay
-import com.example.japanesehabitlock.domain.weekNumberFor
+import com.liktun.japanesehabitlock.domain.DailyChecklist
+import com.liktun.japanesehabitlock.domain.Phase
+import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.StudyDay
+import com.liktun.japanesehabitlock.domain.weekNumberFor
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow

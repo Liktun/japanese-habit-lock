@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.theme
+package com.liktun.japanesehabitlock.theme
 
 import androidx.compose.ui.graphics.Color
 

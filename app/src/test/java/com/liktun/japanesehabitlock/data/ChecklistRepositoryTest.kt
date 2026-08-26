@@ -1,11 +1,11 @@
-package com.example.japanesehabitlock.data
+package com.liktun.japanesehabitlock.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
-import com.example.japanesehabitlock.domain.Phase
-import com.example.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.Phase
+import com.liktun.japanesehabitlock.domain.Roadmap
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow

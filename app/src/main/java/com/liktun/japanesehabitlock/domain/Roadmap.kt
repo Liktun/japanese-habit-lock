@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.domain
+package com.liktun.japanesehabitlock.domain
 
 /**
  * How far along the speaking progression the user has opted in to.

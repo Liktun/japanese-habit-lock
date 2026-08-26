@@ -5,10 +5,10 @@ plugins {
 }
 
 android {
-    namespace = "com.example.japanesehabitlock"
+    namespace = "com.liktun.japanesehabitlock"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.japanesehabitlock"
+        applicationId = "com.liktun.japanesehabitlock"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

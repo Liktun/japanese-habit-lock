@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.theme
+package com.liktun.japanesehabitlock.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.domain
+package com.liktun.japanesehabitlock.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

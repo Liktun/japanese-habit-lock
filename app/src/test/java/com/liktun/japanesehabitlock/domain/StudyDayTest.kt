@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.domain
+package com.liktun.japanesehabitlock.domain
 
 import java.time.Instant
 import java.time.LocalDate

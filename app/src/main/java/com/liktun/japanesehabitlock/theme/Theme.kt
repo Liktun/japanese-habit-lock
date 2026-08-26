@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.theme
+package com.liktun.japanesehabitlock.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

@@ -1,10 +1,10 @@
-package com.example.japanesehabitlock.ui.checklist
+package com.liktun.japanesehabitlock.ui.checklist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.japanesehabitlock.data.ChecklistRepository
-import com.example.japanesehabitlock.domain.DailyChecklist
-import com.example.japanesehabitlock.domain.Phase
+import com.liktun.japanesehabitlock.data.ChecklistRepository
+import com.liktun.japanesehabitlock.domain.DailyChecklist
+import com.liktun.japanesehabitlock.domain.Phase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch

@@ -1,4 +1,4 @@
-package com.example.japanesehabitlock.ui.checklist
+package com.liktun.japanesehabitlock.ui.checklist
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,14 +29,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.japanesehabitlock.data.ChecklistRepository
-import com.example.japanesehabitlock.data.habitLockDataStore
-import com.example.japanesehabitlock.domain.DailyChecklist
-import com.example.japanesehabitlock.domain.Phase
-import com.example.japanesehabitlock.domain.Roadmap
-import com.example.japanesehabitlock.domain.RoadmapTask
-import com.example.japanesehabitlock.domain.StudyDay
-import com.example.japanesehabitlock.theme.JapaneseHabitLockTheme
+import com.liktun.japanesehabitlock.data.ChecklistRepository
+import com.liktun.japanesehabitlock.data.habitLockDataStore
+import com.liktun.japanesehabitlock.domain.DailyChecklist
+import com.liktun.japanesehabitlock.domain.Phase
+import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.RoadmapTask
+import com.liktun.japanesehabitlock.domain.StudyDay
+import com.liktun.japanesehabitlock.theme.JapaneseHabitLockTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
