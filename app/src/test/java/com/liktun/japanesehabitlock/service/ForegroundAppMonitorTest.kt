@@ -2,6 +2,7 @@ package com.liktun.japanesehabitlock.service
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.liktun.japanesehabitlock.domain.Roadmap
 import org.junit.Test
 
 class ForegroundAppMonitorTest {
@@ -186,5 +187,29 @@ class ForegroundAppMonitorTest {
   private companion object {
     const val INSTAGRAM = "com.instagram.android"
     const val TIKTOK = "com.zhiliaoapp.musically"
+  }
+
+  @Test
+  fun `a study tool is never blocked even if it is on the blocked list`() {
+    // Blocking WaniKani would deadlock the gate: it only opens once reviews are done,
+    // and reviews are done inside WaniKani.
+    val guarded = ForegroundAppMonitor(self, neverBlockable = setOf("com.smouldering_durtles.wk"))
+    assertFalse(
+      guarded.shouldBlock("com.smouldering_durtles.wk", setOf("com.smouldering_durtles.wk"), false)
+    )
+  }
+
+  @Test
+  fun `the real roadmap study tools are all refused`() {
+    val guarded = ForegroundAppMonitor(self, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
+    Roadmap.STUDY_TOOL_PACKAGES.forEach { pkg ->
+      assertFalse("expected $pkg to be unblockable", guarded.shouldBlock(pkg, setOf(pkg), false))
+    }
+  }
+
+  @Test
+  fun `a normal app is still blocked when a never-blockable set is supplied`() {
+    val guarded = ForegroundAppMonitor(self, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
+    assertTrue(guarded.shouldBlock("com.example.timesink", setOf("com.example.timesink"), false))
   }
 }

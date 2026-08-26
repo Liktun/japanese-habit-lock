@@ -2,7 +2,7 @@ package com.liktun.japanesehabitlock.domain
 
 /**
  * Everything the checklist screen needs for one study day, and the gate decision
- * the blocking layer will eventually read.
+ * the blocking layer reads.
  *
  * This is a plain value type with no Android or storage dependencies, which keeps
  * the interesting logic — what's done, what still blocks — testable with plain JUnit.
@@ -15,13 +15,19 @@ data class DailyChecklist(
   val completedTaskIds: Set<String>,
 ) {
 
-  /** Tasks that hold the gate shut until they're checked off. */
+  /**
+   * Tasks that hold the gate shut until they're checked off.
+   *
+   * Blocking is evaluated against the current [phase], not stored on the task, because
+   * some tasks graduate: the AI-tutor session is a bonus while the user is only
+   * shadowing and becomes required once they opt in to producing language.
+   */
   val blockingTasks: List<RoadmapTask>
-    get() = tasks.filter { it.blocking }
+    get() = tasks.filter { it.isBlockingIn(phase) }
 
-  /** Tracked and displayed, but never gates anything. */
+  /** Tracked and displayed, but never gates anything at the current phase. */
   val optionalTasks: List<RoadmapTask>
-    get() = tasks.filterNot { it.blocking }
+    get() = tasks.filterNot { it.isBlockingIn(phase) }
 
   fun isDone(task: RoadmapTask): Boolean = task.id in completedTaskIds
 

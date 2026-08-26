@@ -21,10 +21,19 @@ import kotlinx.coroutines.withContext
 class InstalledAppsRepository(
   private val packageManager: PackageManager,
   private val selfPackage: String,
+  /**
+   * Study tools, hidden for the same reason as [selfPackage].
+   *
+   * Blocking WaniKani or Bunpro would deadlock the gate — it only opens once the reviews
+   * are cleared, and they are cleared inside those apps. The service refuses them too;
+   * hiding them here just means the user never has to discover that the hard way.
+   */
+  private val hiddenPackages: Set<String> = emptySet(),
 ) {
 
   /**
-   * Every launchable app except this one, de-duplicated by package and sorted by label.
+   * Every launchable app except this one and the study tools, de-duplicated by package
+   * and sorted by label.
    *
    * Runs on [Dispatchers.IO]: `queryIntentActivities` walks every installed package and
    * loads a label for each, which is far too slow for the main thread even though it is
@@ -36,7 +45,7 @@ class InstalledAppsRepository(
       queryLaunchers(intent)
         .asSequence()
         .map { it.activityInfo.applicationInfo }
-        .filter { it.packageName != selfPackage }
+        .filter { it.packageName != selfPackage && it.packageName !in hiddenPackages }
         // An app may expose several launcher activities; the user picks a package, not one.
         .distinctBy { it.packageName }
         .map { InstalledApp(packageName = it.packageName, label = it.loadLabel(packageManager).toString()) }

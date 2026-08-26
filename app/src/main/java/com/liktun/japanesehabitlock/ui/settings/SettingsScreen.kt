@@ -21,7 +21,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +37,12 @@ import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.apps.InstalledApp
 import com.liktun.japanesehabitlock.data.apps.InstalledAppsRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
+import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.service.AccessibilityServiceStatus
+import com.liktun.japanesehabitlock.service.HeartbeatStatus
+import com.liktun.japanesehabitlock.service.OemBatteryGuidance
+import com.liktun.japanesehabitlock.service.OemGuidance
+import com.liktun.japanesehabitlock.service.ServiceHealthLauncher
 import com.liktun.japanesehabitlock.theme.JapaneseHabitLockTheme
 
 /**
@@ -60,9 +68,19 @@ fun SettingsScreen(
         InstalledAppsRepository(
           packageManager = appContext.packageManager,
           selfPackage = appContext.packageName,
+          hiddenPackages = Roadmap.STUDY_TOOL_PACKAGES,
         ),
     )
   }
+  // The user flips the accessibility toggle outside the app, so the freshest value is
+  // whatever the caller observed on resume. Push it down rather than reading it here.
+  LaunchedEffect(serviceEnabled) { viewModel.setServiceEnabled(serviceEnabled) }
+
+  val guidance = remember { OemBatteryGuidance.forManufacturer(ServiceHealthLauncher.currentManufacturer()) }
+  val openBatterySettings: () -> Unit = {
+    ServiceHealthLauncher.openGuidanceSettings(appContext, guidance)
+  }
+
   val state by viewModel.uiState.collectAsStateWithLifecycle()
 
   when (val current = state) {
@@ -95,6 +113,9 @@ fun SettingsScreen(
         onToggleBlocked = viewModel::setBlocked,
         onOpenAccessibilitySettings = onOpenAccessibilitySettings,
         onNavigateBack = onNavigateBack,
+        health = current.health,
+        guidance = guidance,
+        onOpenBatterySettings = openBatterySettings,
         modifier = modifier,
       )
   }
@@ -118,6 +139,9 @@ internal fun SettingsContent(
   onNavigateBack: () -> Unit,
   modifier: Modifier = Modifier,
   loading: Boolean = false,
+  health: HeartbeatStatus = HeartbeatStatus.Disabled,
+  guidance: OemGuidance? = null,
+  onOpenBatterySettings: () -> Unit = {},
 ) {
   LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { Header(onNavigateBack = onNavigateBack) }
@@ -127,6 +151,12 @@ internal fun SettingsContent(
         serviceEnabled = serviceEnabled,
         onOpenAccessibilitySettings = onOpenAccessibilitySettings,
       )
+    }
+
+    // Only appears when the toggle says "on" but the service has gone quiet or never
+    // ran — the OEM-kill case the ordinary status card cannot detect.
+    if (guidance != null) {
+      item { ServiceHealthWarning(health, guidance, onOpenBatterySettings) }
     }
 
     item { SectionLabel("Blocked apps") }

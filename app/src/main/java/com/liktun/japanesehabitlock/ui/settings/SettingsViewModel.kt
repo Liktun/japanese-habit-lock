@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.apps.InstalledApp
 import com.liktun.japanesehabitlock.data.apps.InstalledAppsRepository
+import com.liktun.japanesehabitlock.service.HeartbeatStatus
+import com.liktun.japanesehabitlock.service.ServiceHeartbeat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +27,26 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
   private val checklistRepository: ChecklistRepository,
   private val installedAppsRepository: InstalledAppsRepository,
+  private val heartbeat: ServiceHeartbeat = ServiceHeartbeat(),
+  private val now: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
 
   private val apps = MutableStateFlow<List<InstalledApp>?>(null)
   private val loadFailure = MutableStateFlow<Throwable?>(null)
   private val searchQuery = MutableStateFlow("")
+
+  /**
+   * Whether the OS reports our service as enabled.
+   *
+   * Pushed in from the UI layer on every resume rather than read here: the value lives in
+   * Settings.Secure, which needs a Context, and the user changes it by leaving the app
+   * entirely.
+   */
+  private val serviceEnabled = MutableStateFlow(false)
+
+  fun setServiceEnabled(enabled: Boolean) {
+    serviceEnabled.update { enabled }
+  }
 
   init {
     viewModelScope.launch {
@@ -39,16 +56,29 @@ class SettingsViewModel(
     }
   }
 
+  private val health: StateFlow<HeartbeatStatus> =
+    combine(checklistRepository.lastServiceHeartbeat, serviceEnabled) { lastSeen, enabled ->
+        heartbeat.status(lastSeen, now(), enabled)
+      }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeartbeatStatus.Disabled)
+
   val uiState: StateFlow<SettingsUiState> =
-    combine(apps, loadFailure, checklistRepository.blockedPackages, searchQuery) {
+    combine(apps, loadFailure, checklistRepository.blockedPackages, searchQuery, health) {
         loaded,
         failure,
         blocked,
-        query ->
+        query,
+        status ->
         when {
           failure != null -> SettingsUiState.Error(failure)
           loaded == null -> SettingsUiState.Loading
-          else -> SettingsUiState.Ready(apps = loaded, blockedPackages = blocked, searchQuery = query)
+          else ->
+            SettingsUiState.Ready(
+              apps = loaded,
+              blockedPackages = blocked,
+              searchQuery = query,
+              health = status,
+            )
         }
       }
       .catch { emit(SettingsUiState.Error(it)) }
@@ -77,6 +107,7 @@ sealed interface SettingsUiState {
     val apps: List<InstalledApp>,
     val blockedPackages: Set<String>,
     val searchQuery: String,
+    val health: HeartbeatStatus = HeartbeatStatus.Disabled,
   ) : SettingsUiState {
     /** The rows the picker actually renders. See [visibleApps] for the ordering rationale. */
     val visibleApps: List<InstalledApp> = visibleApps(apps, blockedPackages, searchQuery)

@@ -69,6 +69,7 @@ fun ChecklistScreen(
         checklist = current.checklist,
         onToggleTask = viewModel::setTaskCompleted,
         onAdvancePhase = viewModel::advanceTo,
+        onOpenTask = { task -> TaskOpener.open(appContext, task.launch) },
         serviceEnabled = serviceEnabled,
         onOpenSettings = onOpenSettings,
         modifier = modifier,
@@ -82,6 +83,7 @@ internal fun ChecklistContent(
   onToggleTask: (String, Boolean) -> Unit,
   onAdvancePhase: (Phase) -> Unit,
   modifier: Modifier = Modifier,
+  onOpenTask: (RoadmapTask) -> Unit = {},
   serviceEnabled: Boolean = true,
   onOpenSettings: () -> Unit = {},
 ) {
@@ -98,13 +100,23 @@ internal fun ChecklistContent(
 
     item { SectionLabel("Today") }
     items(checklist.blockingTasks) { task ->
-      TaskRow(task = task, done = checklist.isDone(task), onToggle = { onToggleTask(task.id, it) })
+      TaskRow(
+        task = task,
+        done = checklist.isDone(task),
+        onToggle = { onToggleTask(task.id, it) },
+        onOpen = task.launch?.let { { onOpenTask(task) } },
+      )
     }
 
     if (checklist.optionalTasks.isNotEmpty()) {
       item { SectionLabel("Optional — never blocks") }
       items(checklist.optionalTasks) { task ->
-        TaskRow(task = task, done = checklist.isDone(task), onToggle = { onToggleTask(task.id, it) })
+        TaskRow(
+          task = task,
+          done = checklist.isDone(task),
+          onToggle = { onToggleTask(task.id, it) },
+          onOpen = task.launch?.let { { onOpenTask(task) } },
+        )
       }
     }
 
@@ -239,7 +251,12 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun TaskRow(task: RoadmapTask, done: Boolean, onToggle: (Boolean) -> Unit) {
+private fun TaskRow(
+  task: RoadmapTask,
+  done: Boolean,
+  onToggle: (Boolean) -> Unit,
+  onOpen: (() -> Unit)? = null,
+) {
   Surface(
     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (done) 0.5f else 1f),
     shape = RoundedCornerShape(12.dp),
@@ -247,11 +264,13 @@ private fun TaskRow(task: RoadmapTask, done: Boolean, onToggle: (Boolean) -> Uni
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.clickable { onToggle(!done) }.padding(horizontal = 8.dp, vertical = 10.dp),
+      // Only the text area toggles. The open button is a separate target so tapping
+      // "go do this" never silently marks it done at the same time.
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
     ) {
       Checkbox(checked = done, onCheckedChange = onToggle)
       Spacer(Modifier.width(4.dp))
-      Column(Modifier.weight(1f)) {
+      Column(Modifier.weight(1f).clickable { onToggle(!done) }) {
         Text(
           text = task.title,
           style = MaterialTheme.typography.bodyLarge,
@@ -263,6 +282,9 @@ private fun TaskRow(task: RoadmapTask, done: Boolean, onToggle: (Boolean) -> Uni
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+      }
+      if (onOpen != null) {
+        TextButton(onClick = onOpen) { Text("Open") }
       }
     }
   }

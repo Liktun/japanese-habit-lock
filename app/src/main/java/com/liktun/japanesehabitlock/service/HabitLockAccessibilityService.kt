@@ -5,6 +5,7 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
+import com.liktun.japanesehabitlock.domain.Roadmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,9 +23,31 @@ import kotlinx.coroutines.launch
  */
 class HabitLockAccessibilityService : AccessibilityService() {
 
-  private val monitor by lazy { ForegroundAppMonitor(packageName) }
+  private val monitor by lazy {
+    ForegroundAppMonitor(packageName, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
+  }
 
   private var scope: CoroutineScope? = null
+
+  /**
+   * The repository used for heartbeat writes, kept so [onAccessibilityEvent] can reach it
+   * without rebuilding one per event. Null before connect and after unbind.
+   */
+  @Volatile
+  private var repository: ChecklistRepository? = null
+
+  /**
+   * Wall-clock millis of our last heartbeat write, or 0 when we have not written one.
+   *
+   * A plain field rather than anything persisted, because it exists purely to throttle
+   * disk writes. `TYPE_WINDOW_STATE_CHANGED` fires many times per minute of normal phone
+   * use, and persisting a timestamp on each one would hammer DataStore — a disk write and
+   * a full-file rewrite per window change — for no extra signal. Once every
+   * [HEARTBEAT_INTERVAL_MILLIS] is more than precise enough to distinguish a live service
+   * from one an OEM killed hours ago.
+   */
+  @Volatile
+  private var lastHeartbeatMillis: Long = 0L
 
   /**
    * Latest gate state, mirrored into fields because [onAccessibilityEvent] is a
@@ -40,7 +63,14 @@ class HabitLockAccessibilityService : AccessibilityService() {
   override fun onServiceConnected() {
     super.onServiceConnected()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { this.scope = it }
-    val repository = ChecklistRepository(applicationContext.habitLockDataStore)
+    val repository = ChecklistRepository(applicationContext.habitLockDataStore).also {
+      this.repository = it
+    }
+    // Record one heartbeat the moment we bind. Without this, a service that is enabled
+    // but has not yet seen a window change is indistinguishable from one that never
+    // started, and the UI would show an alarming "never started" warning to a user whose
+    // service is in fact perfectly healthy.
+    recordHeartbeat(System.currentTimeMillis(), force = true)
     // One collector for both flows: the two values are only ever read together, so a
     // single subscription keeps them consistent and halves the DataStore reads.
     scope.launch {
@@ -55,10 +85,34 @@ class HabitLockAccessibilityService : AccessibilityService() {
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+    // Proof of life, throttled. Every window change we handle is evidence the OS is still
+    // delivering events to us, which is the only reliable signal that an OEM has not
+    // silently reaped the process.
+    recordHeartbeat(System.currentTimeMillis())
     val foregroundPackage = event.packageName?.toString()
     if (monitor.shouldLaunchBlocker(foregroundPackage, blockedPackages, isUnlocked)) {
       launchBlocker()
     }
+  }
+
+  /**
+   * Persists [nowMillis] as the latest proof of life, at most once every
+   * [HEARTBEAT_INTERVAL_MILLIS] unless [force] is set.
+   *
+   * The throttle check happens on the event thread and the write is dispatched to the
+   * collector scope, so a window change never waits on disk. A backwards clock jump
+   * (`nowMillis` before the last write) also passes the check, which is intentional: it
+   * refreshes the stored value rather than leaving a future timestamp wedged in place.
+   */
+  private fun recordHeartbeat(nowMillis: Long, force: Boolean = false) {
+    if (!force && nowMillis - lastHeartbeatMillis < HEARTBEAT_INTERVAL_MILLIS &&
+      nowMillis >= lastHeartbeatMillis
+    ) {
+      return
+    }
+    lastHeartbeatMillis = nowMillis
+    val repository = repository ?: return
+    scope?.launch { repository.recordServiceHeartbeat(nowMillis) }
   }
 
   /**
@@ -91,9 +145,19 @@ class HabitLockAccessibilityService : AccessibilityService() {
   private fun stopCollecting() {
     scope?.cancel()
     scope = null
+    repository = null
   }
 
   private companion object {
     const val BLOCKER_ACTIVITY = "com.liktun.japanesehabitlock.ui.blocker.BlockerActivity"
+
+    /**
+     * Minimum gap between persisted heartbeats.
+     *
+     * Five minutes is two orders of magnitude below `ServiceHeartbeat`'s six-hour stale
+     * window, so the freshness signal is never the limiting factor, while still cutting
+     * DataStore writes from "every window change" down to a handful per hour.
+     */
+    const val HEARTBEAT_INTERVAL_MILLIS = 5L * 60L * 1000L
   }
 }

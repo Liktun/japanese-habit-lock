@@ -12,7 +12,16 @@ package com.liktun.japanesehabitlock.service
  * The self package is injected rather than read from a `Context` for the same reason:
  * the class must be constructible in a unit test.
  */
-class ForegroundAppMonitor(private val selfPackage: String) {
+class ForegroundAppMonitor(
+  private val selfPackage: String,
+  /**
+   * Extra packages that can never be blocked, on top of [ALWAYS_ALLOWED].
+   *
+   * Injected rather than imported so this class keeps zero dependencies — the caller
+   * passes `Roadmap.STUDY_TOOL_PACKAGES`, and tests can pass whatever they like.
+   */
+  private val neverBlockable: Set<String> = emptySet(),
+) {
 
   /**
    * The last package we told the caller to block.
@@ -40,6 +49,10 @@ class ForegroundAppMonitor(private val selfPackage: String) {
     // package would make the blocker re-trigger on itself forever with no way out.
     if (foregroundPackage == selfPackage) return false
     if (foregroundPackage in ALWAYS_ALLOWED) return false
+    // Blocking a study tool would deadlock the gate: it only opens once the reviews
+    // are done, and the reviews are done inside these apps. Refused here as well as
+    // hidden in the picker, so a hand-edited list cannot create that state either.
+    if (foregroundPackage in neverBlockable) return false
     return foregroundPackage in blockedPackages
   }
 

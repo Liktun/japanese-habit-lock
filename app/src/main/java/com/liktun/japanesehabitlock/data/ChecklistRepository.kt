@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.liktun.japanesehabitlock.domain.DailyChecklist
@@ -39,6 +40,15 @@ class ChecklistRepository(
     val PHASE = stringPreferencesKey("active_phase")
     val UNLOCKED = booleanPreferencesKey("all_tasks_done")
     val BLOCKED_PACKAGES = stringSetPreferencesKey("blocked_packages")
+
+    /**
+     * Wall-clock millis of the last time the accessibility service proved it was alive.
+     *
+     * Written by [HabitLockAccessibilityService] and read by the UI so it can tell a
+     * service that is genuinely running from one an aggressive OEM has killed while
+     * leaving its accessibility toggle switched on.
+     */
+    val LAST_SERVICE_HEARTBEAT = longPreferencesKey("last_service_heartbeat")
   }
 
   /** Today's checklist, with completions from a previous day already discarded. */
@@ -55,6 +65,28 @@ class ChecklistRepository(
 
   /** Package names to block while [isUnlocked] is false. Empty until configured. */
   val blockedPackages: Flow<Set<String>> = dataStore.data.map { it[Keys.BLOCKED_PACKAGES].orEmpty() }
+
+  /**
+   * When the accessibility service last proved it was alive, or null if it never has.
+   *
+   * Written by the accessibility service and read by the UI to detect an OEM kill: on
+   * Samsung/Xiaomi/Huawei/OPPO the system reaps our process without clearing the
+   * accessibility toggle, so a switch that still reads "on" is not evidence that
+   * blocking is happening. A timestamp that has stopped advancing is. Absent means the
+   * service has never run, which is a different problem — see `ServiceHeartbeat`, which
+   * turns this value into a status.
+   */
+  val lastServiceHeartbeat: Flow<Long?> = dataStore.data.map { it[Keys.LAST_SERVICE_HEARTBEAT] }
+
+  /**
+   * Records that the service was alive at [atMillis].
+   *
+   * Called from the accessibility service, which throttles it: this is a disk write, and
+   * window-change events arrive far too often to persist one each time.
+   */
+  suspend fun recordServiceHeartbeat(atMillis: Long) {
+    dataStore.edit { prefs -> prefs[Keys.LAST_SERVICE_HEARTBEAT] = atMillis }
+  }
 
   /** Checks or unchecks one task for today. */
   suspend fun setTaskCompleted(taskId: String, completed: Boolean) {

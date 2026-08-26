@@ -163,13 +163,19 @@ class ChecklistRepositoryTest {
 
     val today = repo.checklist.first()
     assertEquals(Phase.SELF_TALK, today.phase)
-    assertEquals(4, today.blockingTotal)
+    // Self-talk introduces its own task AND graduates the AI tutor from optional to
+    // required, so the day goes from 3 blocking tasks to 5.
+    assertEquals(5, today.blockingTotal)
     assertTrue(today.tasks.any { it.id == Roadmap.ID_SELF_TALK })
-    // The extra blocking task means the day is no longer complete.
+    // The extra blocking tasks mean the day is no longer complete.
     assertFalse(today.isUnlocked)
     assertEquals(false, mirrorFlag())
 
     repo.setTaskCompleted(Roadmap.ID_SELF_TALK, true)
+    // Still short one: the AI tutor is blocking from this phase on.
+    assertFalse(repo.isUnlocked.first())
+
+    repo.setTaskCompleted(Roadmap.ID_AI_TUTOR, true)
     assertTrue(repo.isUnlocked.first())
   }
 

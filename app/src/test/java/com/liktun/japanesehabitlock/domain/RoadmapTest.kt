@@ -16,10 +16,16 @@ class RoadmapTest {
   }
 
   @Test
-  fun `phase 1 shows the four shadowing-era tasks`() {
+  fun `phase 1 shows the five shadowing-era tasks`() {
     val tasks = Roadmap.tasksFor(Phase.SHADOWING)
     assertEquals(
-      listOf(Roadmap.ID_WANIKANI, Roadmap.ID_BUNPRO, Roadmap.ID_SHADOWING, Roadmap.ID_IMMERSION),
+      listOf(
+        Roadmap.ID_WANIKANI,
+        Roadmap.ID_BUNPRO,
+        Roadmap.ID_SHADOWING,
+        Roadmap.ID_IMMERSION,
+        Roadmap.ID_AI_TUTOR,
+      ),
       tasks.map { it.id },
     )
   }
@@ -27,15 +33,31 @@ class RoadmapTest {
   @Test
   fun `immersion is present but never blocking`() {
     val immersion = Roadmap.tasksFor(Phase.SHADOWING).single { it.id == Roadmap.ID_IMMERSION }
-    assertFalse(immersion.blocking)
+    assertFalse(immersion.isBlockingIn(Phase.SHADOWING))
+    assertFalse(immersion.isBlockingIn(Phase.SPEAKING))
     assertEquals(3, Roadmap.blockingTasksFor(Phase.SHADOWING).size)
   }
 
   @Test
-  fun `self-talk phase adds a blocking task`() {
+  fun `the AI tutor task is visible but optional while only shadowing`() {
+    val tutor = Roadmap.tasksFor(Phase.SHADOWING).single { it.id == Roadmap.ID_AI_TUTOR }
+    // Phase 1 is explicitly "no speaking pressure yet", so it must not gate.
+    assertFalse(tutor.isBlockingIn(Phase.SHADOWING))
+  }
+
+  @Test
+  fun `the AI tutor task starts blocking once self-talk begins`() {
+    val tutor = Roadmap.ALL_TASKS.single { it.id == Roadmap.ID_AI_TUTOR }
+    assertTrue(tutor.isBlockingIn(Phase.SELF_TALK))
+    assertTrue(tutor.isBlockingIn(Phase.SPEAKING))
+  }
+
+  @Test
+  fun `self-talk phase adds two blocking tasks`() {
     val tasks = Roadmap.tasksFor(Phase.SELF_TALK)
     assertTrue(tasks.any { it.id == Roadmap.ID_SELF_TALK })
-    assertEquals(4, Roadmap.blockingTasksFor(Phase.SELF_TALK).size)
+    // Self-talk itself, plus the AI tutor graduating from optional to required.
+    assertEquals(5, Roadmap.blockingTasksFor(Phase.SELF_TALK).size)
   }
 
   @Test
@@ -43,8 +65,29 @@ class RoadmapTest {
     val tasks = Roadmap.tasksFor(Phase.SPEAKING)
     val conversation = tasks.single { it.id == Roadmap.ID_CONVERSATION }
     // The roadmap is explicit: iTalki/HelloTalk is "a task, not a hard requirement".
-    assertFalse(conversation.blocking)
-    assertEquals(4, Roadmap.blockingTasksFor(Phase.SPEAKING).size)
+    assertFalse(conversation.isBlockingIn(Phase.SPEAKING))
+    assertEquals(5, Roadmap.blockingTasksFor(Phase.SPEAKING).size)
+  }
+
+  @Test
+  fun `study tool packages are collected from every task that has a launch target`() {
+    assertTrue("com.smouldering_durtles.wk" in Roadmap.STUDY_TOOL_PACKAGES)
+    assertTrue("bunpro.jp.bunpro_srs" in Roadmap.STUDY_TOOL_PACKAGES)
+  }
+
+  @Test
+  fun `wanikani prefers the maintained client over the abandoned fork`() {
+    val wanikani = Roadmap.ALL_TASKS.single { it.id == Roadmap.ID_WANIKANI }
+    val candidates = wanikani.launch!!.packageCandidates
+    // Smouldering Durtles is maintained; Flaming Durtles (the_tinkering) is not.
+    assertTrue(candidates.indexOf("com.smouldering_durtles.wk") < candidates.indexOf("com.the_tinkering.wk"))
+  }
+
+  @Test
+  fun `every launch target has a usable web fallback`() {
+    Roadmap.ALL_TASKS.mapNotNull { it.launch }.forEach { launch ->
+      assertTrue(launch.webUrl.startsWith("https://"))
+    }
   }
 
   @Test
@@ -75,8 +118,16 @@ class RoadmapTest {
   fun `advancing a phase can re-lock a day that was already unlocked`() {
     val done = setOf(Roadmap.ID_WANIKANI, Roadmap.ID_BUNPRO, Roadmap.ID_SHADOWING)
     assertTrue(Roadmap.isUnlocked(Phase.SHADOWING, done))
-    // Self-talk introduces a fourth blocking task, so the same completions no longer suffice.
+    // Self-talk introduces more blocking tasks, so the same completions no longer suffice.
     assertFalse(Roadmap.isUnlocked(Phase.SELF_TALK, done))
+  }
+
+  @Test
+  fun `completing the AI tutor is required to unlock from self-talk on`() {
+    val withoutTutor =
+      setOf(Roadmap.ID_WANIKANI, Roadmap.ID_BUNPRO, Roadmap.ID_SHADOWING, Roadmap.ID_SELF_TALK)
+    assertFalse(Roadmap.isUnlocked(Phase.SELF_TALK, withoutTutor))
+    assertTrue(Roadmap.isUnlocked(Phase.SELF_TALK, withoutTutor + Roadmap.ID_AI_TUTOR))
   }
 
   @Test

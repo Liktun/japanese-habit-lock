@@ -45,11 +45,25 @@ class DailyChecklistTest {
   @Test
   fun `optional tasks are listed separately from blocking ones`() {
     val today = checklist()
-    assertEquals(listOf(Roadmap.ID_IMMERSION), today.optionalTasks.map { it.id })
+    // While only shadowing, immersion and the AI tutor are both optional.
+    assertEquals(
+      listOf(Roadmap.ID_IMMERSION, Roadmap.ID_AI_TUTOR),
+      today.optionalTasks.map { it.id },
+    )
     assertEquals(
       listOf(Roadmap.ID_WANIKANI, Roadmap.ID_BUNPRO, Roadmap.ID_SHADOWING),
       today.blockingTasks.map { it.id },
     )
+  }
+
+  @Test
+  fun `the AI tutor moves from optional to blocking when the phase advances`() {
+    val shadowing = checklist(phase = Phase.SHADOWING)
+    assertTrue(Roadmap.ID_AI_TUTOR in shadowing.optionalTasks.map { it.id })
+
+    val selfTalk = checklist(phase = Phase.SELF_TALK)
+    assertTrue(Roadmap.ID_AI_TUTOR in selfTalk.blockingTasks.map { it.id })
+    assertFalse(Roadmap.ID_AI_TUTOR in selfTalk.optionalTasks.map { it.id })
   }
 
   @Test
