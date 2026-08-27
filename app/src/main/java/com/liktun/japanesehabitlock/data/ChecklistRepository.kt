@@ -41,6 +41,16 @@ class ChecklistRepository(
     val UNLOCKED = booleanPreferencesKey("all_tasks_done")
     val BLOCKED_PACKAGES = stringSetPreferencesKey("blocked_packages")
 
+    /** The chosen visual theme, stored by enum name so renaming a label stays safe. */
+    val THEME = stringPreferencesKey("app_theme")
+
+    /**
+     * A manual immersion override, or absent for the automatic week-based ramp.
+     *
+     * Stored separately from [THEME] because it is a learning setting, not a look.
+     */
+    val IMMERSION_PIN = stringPreferencesKey("immersion_pin")
+
     /**
      * Wall-clock millis of the last time the accessibility service proved it was alive.
      *
@@ -79,6 +89,19 @@ class ChecklistRepository(
   val lastServiceHeartbeat: Flow<Long?> = dataStore.data.map { it[Keys.LAST_SERVICE_HEARTBEAT] }
 
   /**
+   * The chosen theme name, or null while the user has not picked one.
+   *
+   * Returned as a raw String rather than an enum so this data layer stays independent of
+   * the UI package that owns the theme list — the caller resolves it, and an unknown
+   * value (an old theme that was since deleted) degrades to the default instead of
+   * crashing on a failed valueOf.
+   */
+  val themeName: Flow<String?> = dataStore.data.map { it[Keys.THEME] }
+
+  /** A manual immersion level override, or null for the automatic week-based ramp. */
+  val immersionPin: Flow<String?> = dataStore.data.map { it[Keys.IMMERSION_PIN] }
+
+  /**
    * Records that the service was alive at [atMillis].
    *
    * Called from the accessibility service, which throttles it: this is a disk write, and
@@ -111,6 +134,18 @@ class ChecklistRepository(
   /** Replaces the blocked-package list the future service will enforce. */
   suspend fun setBlockedPackages(packages: Set<String>) {
     dataStore.edit { prefs -> prefs[Keys.BLOCKED_PACKAGES] = packages }
+  }
+
+  /** Persists the chosen theme. */
+  suspend fun setThemeName(name: String) {
+    dataStore.edit { prefs -> prefs[Keys.THEME] = name }
+  }
+
+  /** Pins the immersion level, or clears the pin to resume the automatic ramp. */
+  suspend fun setImmersionPin(name: String?) {
+    dataStore.edit { prefs ->
+      if (name == null) prefs.remove(Keys.IMMERSION_PIN) else prefs[Keys.IMMERSION_PIN] = name
+    }
   }
 
   /** Clears today's completions. Mainly useful for testing the locked state. */

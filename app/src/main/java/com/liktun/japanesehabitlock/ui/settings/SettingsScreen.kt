@@ -58,6 +58,7 @@ fun SettingsScreen(
   modifier: Modifier = Modifier,
   serviceEnabled: Boolean = false,
   onOpenAccessibilitySettings: () -> Unit = {},
+  onOpenThemePicker: () -> Unit = {},
 ) {
   // applicationContext, not the Activity: the DataStore outlives this screen.
   val appContext = LocalContext.current.applicationContext
@@ -95,6 +96,7 @@ fun SettingsScreen(
         onOpenAccessibilitySettings = onOpenAccessibilitySettings,
         onNavigateBack = onNavigateBack,
         loading = true,
+        onOpenThemePicker = onOpenThemePicker,
         modifier = modifier,
       )
     is SettingsUiState.Error ->
@@ -116,6 +118,7 @@ fun SettingsScreen(
         health = current.health,
         guidance = guidance,
         onOpenBatterySettings = openBatterySettings,
+        onOpenThemePicker = onOpenThemePicker,
         modifier = modifier,
       )
   }
@@ -142,6 +145,7 @@ internal fun SettingsContent(
   health: HeartbeatStatus = HeartbeatStatus.Disabled,
   guidance: OemGuidance? = null,
   onOpenBatterySettings: () -> Unit = {},
+  onOpenThemePicker: () -> Unit = {},
 ) {
   LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { Header(onNavigateBack = onNavigateBack) }
@@ -158,6 +162,10 @@ internal fun SettingsContent(
     if (guidance != null) {
       item { ServiceHealthWarning(health, guidance, onOpenBatterySettings) }
     }
+
+    item { SectionLabel("Appearance") }
+
+    item { ThemeRow(onOpenThemePicker) }
 
     item { SectionLabel("Blocked apps") }
 
@@ -372,5 +380,39 @@ private fun SettingsServiceEnabledPreview() {
       onNavigateBack = {},
       modifier = Modifier.padding(16.dp),
     )
+  }
+}
+
+/**
+ * Entry point to the theme picker.
+ *
+ * A row rather than an inline list: there are six themes and each is a whole screen
+ * design, so they deserve room to be seen rather than a dropdown of names.
+ */
+@Composable
+private fun ThemeRow(onOpenThemePicker: () -> Unit) {
+  Surface(
+    color = MaterialTheme.colorScheme.surfaceVariant,
+    shape = RoundedCornerShape(12.dp),
+    modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenThemePicker),
+  ) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+    ) {
+      Column(Modifier.weight(1f)) {
+        Text(
+          text = "Theme",
+          style = MaterialTheme.typography.bodyLarge,
+          fontWeight = FontWeight.Medium,
+        )
+        Text(
+          text = "Choose how the checklist looks.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Text(text = "→", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
   }
 }
