@@ -25,8 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.liktun.japanesehabitlock.domain.RoadmapTask
+import com.liktun.japanesehabitlock.ui.styles.kinari.KinariScreen
+import com.liktun.japanesehabitlock.ui.styles.kisetsu.KisetsuScreen
 import com.liktun.japanesehabitlock.ui.styles.neon.NeonScreen
 import com.liktun.japanesehabitlock.ui.styles.sumie.SumieScreen
+import com.liktun.japanesehabitlock.ui.styles.sumizome.SumizomeScreen
 import com.liktun.japanesehabitlock.ui.styles.wamodern.WaModernScreen
 
 /**
@@ -49,7 +52,7 @@ class StyleGalleryActivity : ComponentActivity() {
     // Edge to edge with per-style system bars. Without this the status bar renders as an
     // opaque grey slab over every theme, which reads as a theming bug and was the single
     // most damaging flaw in all three designs.
-    val dark = requested == AppStyle.NEON.name
+    val dark = requested == AppStyle.NEON.name || requested == AppStyle.SUMIZOME.name
     enableEdgeToEdge(
       statusBarStyle =
         if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
@@ -60,12 +63,28 @@ class StyleGalleryActivity : ComponentActivity() {
     )
     // "none" is a sentinel: `am start --es` refuses an empty string value.
     val preset = intent.getStringExtra("done").orEmpty().takeUnless { it == "none" }.orEmpty()
-    setContent { StyleGallery(initial = AppStyle.entries.firstOrNull { it.name == requested }, preset = preset) }
+    val week = intent.getIntExtra("week", 3)
+    val date =
+      runCatching { java.time.LocalDate.parse(intent.getStringExtra("date").orEmpty()) }
+        .getOrDefault(java.time.LocalDate.of(2026, 8, 27))
+    setContent {
+      StyleGallery(
+        initial = AppStyle.entries.firstOrNull { it.name == requested },
+        preset = preset,
+        week = week,
+        date = date,
+      )
+    }
   }
 }
 
 @Composable
-private fun StyleGallery(initial: AppStyle?, preset: String) {
+private fun StyleGallery(
+  initial: AppStyle?,
+  preset: String,
+  week: Int = 3,
+  date: java.time.LocalDate = java.time.LocalDate.of(2026, 8, 27),
+) {
   var style by remember { mutableStateOf(initial ?: AppStyle.SUMIE) }
   val completed = remember {
     mutableStateListOf<String>().apply {
@@ -73,7 +92,7 @@ private fun StyleGallery(initial: AppStyle?, preset: String) {
     }
   }
 
-  val checklist = sampleChecklist(completed = completed.toSet())
+  val checklist = sampleChecklist(completed = completed.toSet(), weekNumber = week, date = date)
   val toggle: (String, Boolean) -> Unit = { id, on ->
     if (on) completed.add(id) else completed.remove(id)
   }
@@ -86,6 +105,10 @@ private fun StyleGallery(initial: AppStyle?, preset: String) {
       AppStyle.SUMIE -> Color(0xFFF4F1EA)
       AppStyle.NEON -> Color(0xFF0A0812)
       AppStyle.WA_MODERN -> Color(0xFFFBF7F0)
+      AppStyle.KINARI -> Color(0xFFF7F4EE)
+      AppStyle.SUMIZOME -> Color(0xFF161A21)
+      // Kisetsu repaints itself per season, so the backdrop only has to be close.
+      AppStyle.KISETSU -> Color(0xFFFDF6F2)
     }
 
   Box(Modifier.fillMaxSize().background(backdrop)) {
@@ -94,6 +117,9 @@ private fun StyleGallery(initial: AppStyle?, preset: String) {
       AppStyle.SUMIE -> SumieScreen(checklist, toggle, open, inset)
       AppStyle.NEON -> NeonScreen(checklist, toggle, open, inset)
       AppStyle.WA_MODERN -> WaModernScreen(checklist, toggle, open, inset)
+      AppStyle.KINARI -> KinariScreen(checklist, toggle, open, inset)
+      AppStyle.SUMIZOME -> SumizomeScreen(checklist, toggle, open, inset)
+      AppStyle.KISETSU -> KisetsuScreen(checklist, toggle, open, inset)
     }
 
     // Only shown when no specific style was requested, so screenshots stay clean.
