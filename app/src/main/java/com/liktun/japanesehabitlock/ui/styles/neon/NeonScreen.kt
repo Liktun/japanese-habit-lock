@@ -1,0 +1,199 @@
+package com.liktun.japanesehabitlock.ui.styles.neon
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.liktun.japanesehabitlock.domain.DailyChecklist
+import com.liktun.japanesehabitlock.domain.RoadmapTask
+import java.time.format.DateTimeFormatter
+
+private val NEON_DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE · MMMM d")
+
+/** The hanging sign's glyphs: 習慣 (habit) over 日本語 (Japanese). */
+private val SIGN_GLYPHS = listOf("習", "慣", "・", "日", "本", "語")
+
+/**
+ * **Style 2 — NEON YOKOCHO ネオン横丁.**
+ *
+ * The same [DailyChecklist] the plain screen renders, restaged as a Shinjuku
+ * back-alley at 2am. The composition is a single [Box]: the wet-asphalt backdrop
+ * ([NeonAlleyBackdrop]) at the bottom, the scrolling content above it, and a
+ * [NeonVerticalSign] pinned to the right edge like a signboard bolted to the wall the
+ * user is walking past.
+ *
+ * The design rules the screen holds to:
+ * - **One flickering element.** Only the phase title fails like bad neon. Everything
+ *   else is steady, which is what sells the title.
+ * - **One breathing element.** Only the gate readout pulses, so the screen has a
+ *   single heartbeat rather than a twitch everywhere.
+ * - **Colour is meaning, not decoration.** Magenta means the gate is shut, cyan means
+ *   done or open, amber means optional or "consider this", violet is structure. A
+ *   blocking task is magenta until it is ticked and then turns cyan; optional tasks
+ *   are amber and never touch magenta, so the eye can tell at a glance which rows can
+ *   actually keep it locked out.
+ * - **Nothing is a Material container.** Every panel is [NeonPanel] — a hairline tube
+ *   with a hand-stacked halo over a near-black fill.
+ *
+ * State is fully hoisted: the screen owns no checklist state and only reports taps
+ * back through [onToggleTask] and [onOpenTask].
+ *
+ * @param checklist the day's data, rendered in full.
+ * @param onToggleTask task id + desired completion state.
+ * @param onOpenTask invoked for tasks with a non-null `launch`.
+ */
+@Composable
+fun NeonScreen(
+  checklist: DailyChecklist,
+  onToggleTask: (String, Boolean) -> Unit,
+  onOpenTask: (RoadmapTask) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val unlocked = checklist.isUnlocked
+  val signColor = if (unlocked) NeonPalette.Cyan else NeonPalette.Magenta
+
+  Box(modifier = modifier.fillMaxSize()) {
+    NeonAlleyBackdrop(Modifier.fillMaxSize())
+
+    LazyColumn(
+      modifier = Modifier.fillMaxSize(),
+      contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 36.dp),
+    ) {
+      item(key = "header") {
+        // Header and the hanging sign share a row so the sign starts at the alley mouth.
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+          NeonSignHeader(
+            phaseLabel = checklist.phase.label,
+            phaseSummary = checklist.phase.summary,
+            weekNumber = checklist.weekNumber,
+            formattedDate = checklist.day.date.format(NEON_DAY_FORMAT),
+            titleColor = signColor,
+            modifier = Modifier.weight(1f),
+          )
+          Spacer(Modifier.width(14.dp))
+          NeonVerticalSign(glyphs = SIGN_GLYPHS, color = signColor)
+        }
+      }
+
+      gap(20.dp)
+
+      item(key = "gate") {
+        NeonGateStatus(
+          unlocked = unlocked,
+          blockingDone = checklist.blockingDone,
+          blockingTotal = checklist.blockingTotal,
+          progress = checklist.progress,
+        )
+      }
+
+      gap(20.dp)
+
+      item(key = "focus-label") {
+        NeonSectionLabel(japanese = "週", english = "This week", color = NeonPalette.Violet)
+      }
+      gap(10.dp)
+      item(key = "focus") { NeonFocusPanel(focus = checklist.focus, weekNumber = checklist.weekNumber) }
+
+      gap(22.dp)
+
+      item(key = "today-label") {
+        NeonSectionLabel(
+          japanese = "必須",
+          english = "Required today",
+          color = NeonPalette.Magenta,
+          trailing = "${checklist.blockingDone}/${checklist.blockingTotal}",
+        )
+      }
+      gap(10.dp)
+      taskRows(
+        tasks = checklist.blockingTasks,
+        checklist = checklist,
+        // Magenta = this row is why you are locked out. It turns cyan when cleared.
+        accent = NeonPalette.Magenta,
+        onToggleTask = onToggleTask,
+        onOpenTask = onOpenTask,
+      )
+
+      if (checklist.optionalTasks.isNotEmpty()) {
+        gap(22.dp)
+        item(key = "optional-label") {
+          NeonSectionLabel(
+            japanese = "任意",
+            english = "Optional",
+            color = NeonPalette.Amber,
+            trailing = "never blocks",
+          )
+        }
+        gap(10.dp)
+        taskRows(
+          tasks = checklist.optionalTasks,
+          checklist = checklist,
+          // Amber, never magenta: these cannot hold the gate shut at this phase.
+          accent = NeonPalette.Amber,
+          onToggleTask = onToggleTask,
+          onOpenTask = onOpenTask,
+        )
+      }
+
+      gap(22.dp)
+
+      item(key = "checkpoint-label") {
+        NeonSectionLabel(japanese = "点検", english = "Weekly checkpoint", color = NeonPalette.Violet)
+      }
+      gap(10.dp)
+      item(key = "checkpoints") { NeonCheckpointList(checkpoints = checklist.checkpoints) }
+
+      checklist.phasePrompt?.let { prompt ->
+        gap(20.dp)
+        item(key = "phase-prompt") { NeonPhasePrompt(prompt = prompt) }
+      }
+
+      gap(30.dp)
+      item(key = "footer") { NeonFooter(checklist) }
+    }
+  }
+}
+
+/** Vertical rhythm as list items, so spacing survives item recycling. */
+private fun LazyListScope.gap(height: androidx.compose.ui.unit.Dp) {
+  item { Spacer(Modifier.height(height)) }
+}
+
+/**
+ * Emits one [NeonTaskRow] per task, keyed by task id so a toggle animates the row it
+ * belongs to instead of whatever is currently at that index.
+ */
+private fun LazyListScope.taskRows(
+  tasks: List<RoadmapTask>,
+  checklist: DailyChecklist,
+  accent: androidx.compose.ui.graphics.Color,
+  onToggleTask: (String, Boolean) -> Unit,
+  onOpenTask: (RoadmapTask) -> Unit,
+) {
+  tasks.forEachIndexed { index, task ->
+    item(key = task.id) {
+      Column {
+        if (index > 0) Spacer(Modifier.height(10.dp))
+        NeonTaskRow(
+          task = task,
+          done = checklist.isDone(task),
+          accent = accent,
+          onToggle = { desired -> onToggleTask(task.id, desired) },
+          onOpen = task.launch?.let { { onOpenTask(task) } },
+        )
+      }
+    }
+  }
+}

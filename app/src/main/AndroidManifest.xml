@@ -45,6 +45,17 @@
             android:theme="@style/Theme.JapaneseHabitLock" />
 
         <!--
+          Throwaway gallery for comparing the three candidate front-ends on a device.
+          exported=true so adb can launch it directly during screenshot capture; it has
+          no launcher intent-filter, so it never appears in the app drawer. Remove this
+          along with the ui/styles package once a style is chosen.
+        -->
+        <activity
+            android:name=".ui.styles.StyleGalleryActivity"
+            android:exported="true"
+            android:theme="@style/Theme.JapaneseHabitLock" />
+
+        <!--
           NOTE: android:isAccessibilityTool is deliberately NOT set. This app is a habit
           gate, not an assistive tool for users with disabilities. Claiming that attribute
           falsely triggers Google Play Protect's "Deceptive Accessibility Tool" warning.
