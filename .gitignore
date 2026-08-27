@@ -18,5 +18,14 @@ local.properties
 *.log
 .idea/
 
+# Signing material. A release keystore is irreplaceable: lose it and the app can
+# never be updated on Play under the same listing, and leak it and someone else can
+# sign builds that impersonate yours. Neither the keystore nor its passwords are ever
+# committed - CI reads them from GitHub Secrets instead.
+*.jks
+*.keystore
+keystore.properties
+release-keystore-backup*
+
 # Plans are working notes, not shipped artifacts.
 .hermes/

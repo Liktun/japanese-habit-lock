@@ -15,14 +15,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liktun.japanesehabitlock.domain.DailyChecklist
 import com.liktun.japanesehabitlock.domain.RoadmapTask
+import com.liktun.japanesehabitlock.domain.immersion.Immersion
+import com.liktun.japanesehabitlock.domain.immersion.ImmersionStrings
 
 /**
  * The daily checklist in the WA-MODERN (和モダン) style.
@@ -33,6 +37,18 @@ import com.liktun.japanesehabitlock.domain.RoadmapTask
  * gold leaf used only for hairlines and the kumiko lattice between sections. Japanese
  * glosses sit beside the English section labels at a smaller size and in warm gray, so
  * they read as garnish rather than as a second headline.
+ *
+ * **Immersion.** Every user-facing phrase on this screen resolves through a single
+ * [Immersion] instance derived from the week number, so the interface becomes Japanese
+ * as the roadmap progresses: headings first, then task names with kana readings printed
+ * above them, then details, and finally the readings come off. One resolver is built
+ * here and threaded down rather than each component computing its own, because two
+ * components disagreeing about the level on one screen would read as a bug rather than
+ * as a design.
+ *
+ * The decorative kanji that used to sit beside every English heading is treated as a
+ * garnish that *graduates*: it shows while the heading is English, and steps aside once
+ * the heading is itself Japanese, so the screen never renders "今日 今日".
  *
  * Everything from the plain checklist survives the restyle: phase label and summary,
  * week number and formatted date, the locked/unlocked state, `blockingDone` of
@@ -56,6 +72,10 @@ fun WaModernScreen(
   onOpenTask: (RoadmapTask) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  // Keyed on the week alone: the level can only change when the week does, so this
+  // survives every recomposition a checkbox toggle causes.
+  val immersion = remember(checklist.weekNumber) { Immersion.forWeek(checklist.weekNumber) }
+
   LazyColumn(
     modifier = modifier
       .fillMaxSize()
@@ -65,18 +85,23 @@ fun WaModernScreen(
   ) {
     item(key = "header") { WaHeaderCard(checklist) }
 
-    item(key = "gate") { WaGateBanner(checklist) }
+    item(key = "gate") { WaGateBanner(checklist, immersion) }
 
     item(key = "kumiko-1") { KumikoDivider(Modifier.padding(vertical = 4.dp)) }
 
     // ── Today: the blocking tasks. These are what actually hold the gate shut.
     item(key = "today-header") {
-      WaSectionHeader(title = "Today", japanese = "今日")
+      WaSectionHeader(
+        phrase = ImmersionStrings.TODAY,
+        immersion = immersion,
+        garnish = "今日",
+      )
     }
     waTasks(
       tasks = checklist.blockingTasks,
       keyPrefix = "block",
       checklist = checklist,
+      immersion = immersion,
       onToggleTask = onToggleTask,
       onOpenTask = onOpenTask,
     )
@@ -86,14 +111,32 @@ fun WaModernScreen(
       item(key = "optional-header") {
         Column {
           Spacer(Modifier.height(6.dp))
-          WaSectionHeader(title = "Optional", japanese = "任意", accent = WaPalette.warmGray)
+          WaSectionHeader(
+            phrase = ImmersionStrings.OPTIONAL,
+            immersion = immersion,
+            garnish = "任意",
+            accent = WaPalette.warmGray,
+          )
           Spacer(Modifier.height(6.dp))
-          Text(
-            text = "Nice to do. These never block your apps.",
-            fontFamily = FontFamily.SansSerif,
-            fontWeight = FontWeight.Light,
-            fontSize = 12.5.sp,
+          // The reassurance under the heading. Routed through the ramp too, otherwise a
+          // lone English sentence would sit orphaned beneath a Japanese heading. At
+          // English level it keeps its original, friendlier full sentence.
+          val neverBlocks = immersion.sectionLabel(ImmersionStrings.NEVER_BLOCKS)
+          Ruby(
+            text = if (neverBlocks == ImmersionStrings.NEVER_BLOCKS.english) {
+              "Nice to do. These never block your apps."
+            } else {
+              neverBlocks
+            },
+            reading = immersion.sectionRuby(ImmersionStrings.NEVER_BLOCKS),
+            style = TextStyle(
+              fontFamily = FontFamily.SansSerif,
+              fontWeight = FontWeight.Light,
+              fontSize = 12.5.sp,
+              lineHeight = 17.sp,
+            ),
             color = WaPalette.warmGray,
+            modifier = Modifier.align(Alignment.Start),
           )
         }
       }
@@ -101,6 +144,7 @@ fun WaModernScreen(
         tasks = checklist.optionalTasks,
         keyPrefix = "opt",
         checklist = checklist,
+        immersion = immersion,
         onToggleTask = onToggleTask,
         onOpenTask = onOpenTask,
       )
@@ -110,7 +154,11 @@ fun WaModernScreen(
 
     // ── This week: the one-line framing plus the weekly self-check.
     item(key = "week-header") {
-      WaSectionHeader(title = "This week", japanese = "週")
+      WaSectionHeader(
+        phrase = ImmersionStrings.THIS_WEEK,
+        immersion = immersion,
+        garnish = "今週",
+      )
     }
     item(key = "focus") { WaFocusCard(checklist.focus) }
 
@@ -118,8 +166,9 @@ fun WaModernScreen(
       Column {
         Spacer(Modifier.height(6.dp))
         WaSectionHeader(
-          title = "Weekly checkpoint",
-          japanese = "確認",
+          phrase = ImmersionStrings.WEEKLY_CHECKPOINT,
+          immersion = immersion,
+          garnish = "確認",
           accent = WaPalette.warmGray,
         )
       }
@@ -144,6 +193,7 @@ private fun LazyListScope.waTasks(
   tasks: List<RoadmapTask>,
   keyPrefix: String,
   checklist: DailyChecklist,
+  immersion: Immersion,
   onToggleTask: (String, Boolean) -> Unit,
   onOpenTask: (RoadmapTask) -> Unit,
 ) {
@@ -152,6 +202,7 @@ private fun LazyListScope.waTasks(
       WaTaskCard(
         task = task,
         done = checklist.isDone(task),
+        immersion = immersion,
         onToggle = { checked -> onToggleTask(task.id, checked) },
         onOpen = task.launch?.let { { onOpenTask(task) } },
       )

@@ -35,12 +35,17 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.liktun.japanesehabitlock.domain.DailyChecklist
 import com.liktun.japanesehabitlock.domain.RoadmapTask
+import com.liktun.japanesehabitlock.domain.immersion.Immersion
+import com.liktun.japanesehabitlock.domain.immersion.ImmersionPlan
+import com.liktun.japanesehabitlock.domain.immersion.ImmersionStrings
+import com.liktun.japanesehabitlock.domain.immersion.Phrase
 import java.time.format.DateTimeFormatter
 
 internal val WA_DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
@@ -48,42 +53,73 @@ internal val WA_DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE
 // ────────────────────────────────────────────────────────────── section header
 
 /**
- * A section header: an English label in tracked-out small caps, a small Japanese
- * gloss beside it, and a gold-leaf hairline running out to the right margin.
+ * A section header: the label, a gold-leaf hairline running out to the right margin,
+ * and — only while the label is still English — a small Japanese gloss beside it.
  *
- * The kanji is deliberately *smaller* and in [WaPalette.warmGray] — it is a seasonal
- * garnish on the English, never a competing headline. The hairline gives every section
- * the same left-aligned "shoji rail" so the page reads as one grid.
+ * The gloss is the subtle part. Wa-Modern's original design set a decorative kanji next
+ * to every English heading ("TODAY 今日") as a seasonal garnish. Once the immersion ramp
+ * turns the heading *itself* into 今日, that garnish would render as "今日 今日" — so it
+ * is dropped the moment the label switches language, and the reading takes over the job
+ * of the second line. The result is that the decoration never disappears, it graduates:
+ * a garnish at English level, a furigana line afterwards.
+ *
+ * The English label is tracked-out small caps; the Japanese one is not, because letter
+ * spacing applied to kanji just pulls the characters apart. The hairline gives every
+ * section the same left-aligned "shoji rail" so the page reads as one grid.
+ *
+ * @param phrase the heading's phrase, resolved through [immersion] here rather than by
+ *   the caller so the garnish/ruby decision stays in one place.
+ * @param immersion the level resolver for the current week.
+ * @param garnish the decorative kanji shown beside the English label, and only then.
  */
 @Composable
 fun WaSectionHeader(
-  title: String,
-  japanese: String,
+  phrase: Phrase,
+  immersion: Immersion,
   modifier: Modifier = Modifier,
+  garnish: String? = null,
   accent: Color = WaPalette.indigo,
 ) {
+  val label = immersion.sectionLabel(phrase)
+  val reading = immersion.sectionRuby(phrase)
+  val isEnglish = label == phrase.english && phrase.english != phrase.japanese
+
   Row(
-    verticalAlignment = Alignment.CenterVertically,
+    verticalAlignment = Alignment.Bottom,
     modifier = modifier.fillMaxWidth(),
   ) {
-    Text(
-      text = title.uppercase(),
-      fontFamily = FontFamily.SansSerif,
-      fontWeight = FontWeight.SemiBold,
-      fontSize = 12.sp,
-      letterSpacing = 2.4.sp,
+    Ruby(
+      text = if (isEnglish) label.uppercase() else label,
+      reading = reading,
+      style = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = if (isEnglish) 12.sp else 14.sp,
+        lineHeight = if (isEnglish) 16.sp else 18.sp,
+        letterSpacing = if (isEnglish) 2.4.sp else 0.6.sp,
+      ),
       color = accent,
+      rubyColor = WaPalette.warmGray,
     )
-    Spacer(Modifier.width(8.dp))
-    Text(
-      text = japanese,
-      fontFamily = FontFamily.SansSerif,
-      fontWeight = FontWeight.Light,
-      fontSize = 11.sp,
-      color = WaPalette.warmGray,
-    )
+    // The garnish only earns its place while the heading is English.
+    if (isEnglish && garnish != null) {
+      Spacer(Modifier.width(8.dp))
+      Text(
+        text = garnish,
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Light,
+        fontSize = 11.sp,
+        color = WaPalette.warmGray,
+        modifier = Modifier.padding(bottom = 1.dp),
+      )
+    }
     Spacer(Modifier.width(12.dp))
-    Canvas(Modifier.weight(1f).height(1.dp)) {
+    Canvas(
+      Modifier
+        .weight(1f)
+        .padding(bottom = 5.dp)
+        .height(1.dp),
+    ) {
       drawLine(
         color = WaPalette.goldLeaf,
         start = Offset(0f, size.height / 2f),
@@ -196,10 +232,24 @@ private fun WaPill(text: String) {
  * colour should both say "here's what's left", so the banner reads as a bookmark rather
  * than an error state. Unlocked graduates to matcha, closing the colour loop with the
  * progress ring.
+ *
+ * The state word comes from [Immersion.gate], so it becomes 施錠中 / 解錠 with its reading
+ * once the ramp reaches [com.liktun.japanesehabitlock.domain.immersion.ImmersionLevel.LABELS].
+ * The 開 / 閉 mark beside it is the same garnish idea as the section headers: a decorative
+ * second glyph while the word is English, dropped once the word itself is Japanese so the
+ * row never reads as two competing kanji.
  */
 @Composable
-fun WaGateBanner(checklist: DailyChecklist, modifier: Modifier = Modifier) {
+fun WaGateBanner(
+  checklist: DailyChecklist,
+  immersion: Immersion,
+  modifier: Modifier = Modifier,
+) {
   val unlocked = checklist.isUnlocked
+  val phrase = if (unlocked) ImmersionStrings.UNLOCKED else ImmersionStrings.LOCKED
+  val state = immersion.gate(phrase)
+  val reading = immersion.ruby(phrase, ImmersionPlan.GATE_STATE)
+  val stateIsEnglish = state == phrase.english
   val tint = if (unlocked) WaPalette.matcha else WaPalette.sakura
   val ink = if (unlocked) WaPalette.matchaDeep else WaPalette.sakuraDeep
   val remaining = (checklist.blockingTotal - checklist.blockingDone).coerceAtLeast(0)
@@ -223,22 +273,29 @@ fun WaGateBanner(checklist: DailyChecklist, modifier: Modifier = Modifier) {
       Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f)) {
         Row(verticalAlignment = Alignment.Bottom) {
-          Text(
-            text = if (unlocked) "Unlocked" else "Locked",
-            fontFamily = FontFamily.SansSerif,
-            fontWeight = FontWeight.Bold,
-            fontSize = 15.sp,
+          Ruby(
+            text = state,
+            reading = reading,
+            style = TextStyle(
+              fontFamily = FontFamily.SansSerif,
+              fontWeight = FontWeight.Bold,
+              fontSize = 15.sp,
+              lineHeight = 20.sp,
+            ),
             color = ink,
+            rubyColor = ink.copy(alpha = 0.55f),
           )
-          Spacer(Modifier.width(7.dp))
-          Text(
-            text = if (unlocked) "開" else "閉",
-            fontFamily = FontFamily.SansSerif,
-            fontWeight = FontWeight.Light,
-            fontSize = 11.sp,
-            color = WaPalette.warmGray,
-            modifier = Modifier.padding(bottom = 2.dp),
-          )
+          if (stateIsEnglish) {
+            Spacer(Modifier.width(7.dp))
+            Text(
+              text = if (unlocked) "開" else "閉",
+              fontFamily = FontFamily.SansSerif,
+              fontWeight = FontWeight.Light,
+              fontSize = 11.sp,
+              color = WaPalette.warmGray,
+              modifier = Modifier.padding(bottom = 2.dp),
+            )
+          }
         }
         Spacer(Modifier.height(3.dp))
         Text(
@@ -350,11 +407,18 @@ fun WaCheckbox(
  * plus a matcha wash that tints the surface, softens the title and pushes the whole row
  * back visually, so finished work recedes and the remaining work is what your eye lands
  * on.
+ *
+ * The title routes through [Immersion.taskTitle] and carries its reading via [Ruby], so
+ * once the ramp reaches TITLES the row grows by exactly one small kana line. The card's
+ * vertical padding is trimmed slightly to absorb that: without it, a column of cards each
+ * a ruby-line taller would make the screen feel cramped rather than airy, which is the
+ * opposite of what this style is for.
  */
 @Composable
 fun WaTaskCard(
   task: RoadmapTask,
   done: Boolean,
+  immersion: Immersion,
   onToggle: (Boolean) -> Unit,
   modifier: Modifier = Modifier,
   onOpen: (() -> Unit)? = null,
@@ -363,6 +427,9 @@ fun WaTaskCard(
   val wash = bounce.wash
   val surface = lerp(WaPalette.surface, WaPalette.matcha.copy(alpha = 0.5f), wash * 0.22f)
   val titleColor = lerp(WaPalette.indigo, WaPalette.matchaDeep, wash)
+  val titleRuby = immersion.taskTitleRuby(task.id, task.title)
+  // Readings add a line of their own, so the frame gives a little of its padding back.
+  val vertical = if (titleRuby != null) 12.dp else 14.dp
 
   WaCard(
     modifier = modifier.completionBounce(bounce),
@@ -372,7 +439,9 @@ fun WaTaskCard(
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 14.dp),
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(start = 16.dp, end = 10.dp, top = vertical, bottom = vertical),
     ) {
       WaCheckbox(checked = done, onCheckedChange = onToggle)
       Spacer(Modifier.width(14.dp))
@@ -384,17 +453,24 @@ fun WaTaskCard(
             indication = null,
           ) { onToggle(!done) },
       ) {
-        Text(
-          text = task.title,
-          fontFamily = FontFamily.SansSerif,
-          fontWeight = if (done) FontWeight.Normal else FontWeight.SemiBold,
-          fontSize = 15.sp,
-          lineHeight = 20.sp,
+        Ruby(
+          text = immersion.taskTitle(task.id, task.title),
+          reading = titleRuby,
+          style = TextStyle(
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = if (done) FontWeight.Normal else FontWeight.SemiBold,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+          ),
           color = titleColor.copy(alpha = 1f - 0.22f * wash),
+          rubyColor = WaPalette.warmGray.copy(alpha = 0.9f - 0.28f * wash),
+          // The ruby centres on the title, but the title itself still starts on the
+          // card's text margin like every other row.
+          modifier = Modifier.align(Alignment.Start),
         )
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(if (titleRuby != null) 4.dp else 3.dp))
         Text(
-          text = task.detail,
+          text = immersion.taskDetail(task.id, task.detail),
           fontFamily = FontFamily.SansSerif,
           fontWeight = FontWeight.Light,
           fontSize = 12.5.sp,
@@ -404,7 +480,11 @@ fun WaTaskCard(
       }
       if (onOpen != null) {
         Spacer(Modifier.width(8.dp))
-        WaOpenButton(onClick = onOpen)
+        WaOpenButton(
+          label = immersion.action(ImmersionStrings.OPEN_ACTION),
+          reading = immersion.ruby(ImmersionStrings.OPEN_ACTION, ImmersionPlan.ACTIONS),
+          onClick = onOpen,
+        )
       }
     }
   }
@@ -414,25 +494,39 @@ fun WaTaskCard(
  * The "open this tool" affordance: an outlined sakura capsule.
  *
  * Outlined rather than filled because it is a *side door* — the primary action on every
- * row is the checkbox, and a solid button here would out-shout it.
+ * row is the checkbox, and a solid button here would out-shout it. The capsule's vertical
+ * padding eases off when a reading is present so the pill keeps its proportions instead
+ * of ballooning into a block.
  */
 @Composable
-fun WaOpenButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun WaOpenButton(
+  label: String,
+  reading: String?,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Box(
     modifier = modifier
       .clip(CircleShape)
       .border(1.dp, WaPalette.sakuraDeep.copy(alpha = 0.45f), CircleShape)
       .clickable(onClick = onClick)
-      .padding(horizontal = 14.dp, vertical = 7.dp),
+      .padding(horizontal = 14.dp, vertical = if (reading != null) 5.dp else 7.dp),
     contentAlignment = Alignment.Center,
   ) {
-    Text(
-      text = "Open",
-      fontFamily = FontFamily.SansSerif,
-      fontWeight = FontWeight.SemiBold,
-      fontSize = 12.sp,
-      letterSpacing = 0.5.sp,
+    Ruby(
+      text = label,
+      reading = reading,
+      style = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 12.sp,
+        lineHeight = 15.sp,
+        letterSpacing = 0.5.sp,
+      ),
       color = WaPalette.sakuraDeep,
+      rubyColor = WaPalette.sakuraDeep.copy(alpha = 0.62f),
+      rubySize = 8.5.sp,
+      rubyGap = 1.dp,
     )
   }
 }

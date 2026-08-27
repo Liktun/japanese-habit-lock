@@ -1,8 +1,35 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
+
+/**
+ * Release signing credentials.
+ *
+ * Read from `keystore.properties` (git-ignored, next to this file or pointed at by
+ * KEYSTORE_PROPERTIES) so the secrets never enter the repo. CI writes the same file
+ * from GitHub Secrets before building.
+ *
+ * When the file is absent — a fresh clone, or a contributor who only builds debug —
+ * signing is simply not configured and `assembleRelease` produces an unsigned APK
+ * rather than failing the whole build. Debug builds are unaffected either way.
+ */
+val keystorePropertiesFile: File =
+  providers.environmentVariable("KEYSTORE_PROPERTIES").orNull?.let(::File)
+    ?: rootProject.file("keystore.properties")
+
+val keystoreProperties =
+  Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+      keystorePropertiesFile.inputStream().use { load(it) }
+    }
+  }
+
+val hasSigningConfig = keystoreProperties.getProperty("storeFile")?.let { File(it).exists() } == true
 
 android {
     namespace = "com.liktun.japanesehabitlock"
@@ -15,10 +42,32 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+      if (hasSigningConfig) {
+        create("release") {
+          storeFile = File(keystoreProperties.getProperty("storeFile"))
+          storePassword = keystoreProperties.getProperty("storePassword")
+          keyAlias = keystoreProperties.getProperty("keyAlias")
+          keyPassword = keystoreProperties.getProperty("keyPassword")
+          // Both signature schemes: v2 is required for modern Android, v1 keeps
+          // sideloading working on older devices within our minSdk 26 range.
+          enableV1Signing = true
+          enableV2Signing = true
+        }
+      }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 on: it strips unused Compose and DataStore code, which is most of the
+            // APK. Shrinking resources too since the six themes ship a lot of unused
+            // Material defaults.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasSigningConfig) {
+              signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
