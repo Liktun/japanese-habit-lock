@@ -38,8 +38,12 @@ android {
         applicationId = "com.liktun.japanesehabitlock"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Bumped on every user-visible release. Android refuses to install an APK whose
+        // versionCode is not greater than the installed one, so shipping a build with a
+        // stale code fails as a confusing "app not installed" rather than an obvious
+        // error. Play additionally rejects a re-used code outright.
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
