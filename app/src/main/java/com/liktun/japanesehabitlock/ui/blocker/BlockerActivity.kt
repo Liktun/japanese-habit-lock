@@ -60,6 +60,9 @@ class BlockerActivity : ComponentActivity() {
 
     val repository = ChecklistRepository(applicationContext.habitLockDataStore)
     val checklistFlow = repository.checklist
+    // Read once here rather than in the composable: the Activity is relaunched with a
+    // fresh Intent on each block, so this is the only place the value is authoritative.
+    val surfaceLabel = intent?.getStringExtra("surface_label")
 
     setContent {
       JapaneseHabitLockTheme {
@@ -70,6 +73,7 @@ class BlockerActivity : ComponentActivity() {
               checklist = it,
               onOpenChecklist = { openChecklist() },
               modifier = Modifier.safeDrawingPadding().padding(24.dp),
+              surfaceLabel = surfaceLabel,
             )
           }
         }
@@ -103,6 +107,15 @@ internal fun BlockerContent(
   checklist: DailyChecklist,
   onOpenChecklist: () -> Unit,
   modifier: Modifier = Modifier,
+  /**
+   * The surface that was blocked, or null for a whole-app block.
+   *
+   * Naming it matters: a user who chose to block only Reels needs to see that Reels is
+   * what stopped them, not a generic wall that looks like the app broke. It is also the
+   * fastest way to notice a false positive - if this says "Instagram Reels" while they
+   * were reading a DM, the rule is wrong and they can tell us.
+   */
+  surfaceLabel: String? = null,
 ) {
   val remaining = checklist.blockingTasks.filterNot { checklist.isDone(it) }
 
@@ -113,6 +126,15 @@ internal fun BlockerContent(
       fontWeight = FontWeight.Bold,
       color = MaterialTheme.colorScheme.onErrorContainer,
     )
+    if (surfaceLabel != null) {
+      Spacer(Modifier.height(6.dp))
+      Text(
+        text = surfaceLabel,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onErrorContainer,
+      )
+    }
     Spacer(Modifier.height(8.dp))
     Text(
       text =
@@ -121,6 +143,14 @@ internal fun BlockerContent(
       style = MaterialTheme.typography.bodyLarge,
       color = MaterialTheme.colorScheme.onErrorContainer,
     )
+    if (surfaceLabel != null) {
+      Spacer(Modifier.height(6.dp))
+      Text(
+        text = "The rest of the app still works.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.78f),
+      )
+    }
 
     Spacer(Modifier.height(28.dp))
 

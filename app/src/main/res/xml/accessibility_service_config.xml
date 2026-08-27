@@ -2,19 +2,31 @@
 <!--
   Configuration for HabitLockAccessibilityService.
 
-  We deliberately request the bare minimum. The service only needs to know which app
-  moved to the foreground, which arrives as the package name on the event itself, so
-  canRetrieveWindowContent is false: we never read screen text, and asking for it would
-  be an unjustified privacy ask that reviewers and users would rightly object to.
+  canRetrieveWindowContent is TRUE, and that is a deliberate, costly choice.
 
-  Note there is no android:isAccessibilityTool here. This app is a self-control tool,
-  not an accessibility aid, and falsely declaring otherwise trips Play Protect's
-  "Deceptive Accessibility Tool" warning. The description below explains the real
-  purpose to the user instead.
+  It was false until surface blocking existed, because the package name of the
+  foreground app arrives on the event itself and nothing more was needed. Blocking a
+  single surface - the Reels tab but not a reel a friend sent you - cannot be done from
+  the package name alone: both are com.instagram.android. Telling them apart requires
+  reading the view hierarchy.
+
+  What this app actually does with that access is narrow and enforced in one auditable
+  file, ViewIdCollector.kt: it reads getViewIdResourceName() and NOTHING else. Node
+  text, content descriptions and hint text are never read, nothing is stored beyond the
+  event being handled, and the manifest requests no network permission, so nothing can
+  leave the device.
+
+  typeWindowContentChanged is added alongside typeWindowStateChanged because moving
+  between tabs inside Instagram does not always produce a state change - without it,
+  opening Reels from the home feed would go unnoticed.
+
+  There is still no android:isAccessibilityTool. This is a self-control tool, not an
+  accessibility aid, and falsely declaring otherwise trips Play Protect's "Deceptive
+  Accessibility Tool" warning.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="100"
-    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="200"
+    android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description" />

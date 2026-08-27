@@ -45,6 +45,15 @@ class ChecklistRepository(
     val THEME = stringPreferencesKey("app_theme")
 
     /**
+     * Surfaces blocked individually, by BlockableSurface.id.
+     *
+     * Separate from BLOCKED_PACKAGES because they are different promises: a package is
+     * blocked outright, while a surface leaves the rest of the app usable. Merging them
+     * would make "Instagram is blocked" ambiguous.
+     */
+    val BLOCKED_SURFACES = stringSetPreferencesKey("blocked_surfaces")
+
+    /**
      * A manual immersion override, or absent for the automatic week-based ramp.
      *
      * Stored separately from [THEME] because it is a learning setting, not a look.
@@ -98,6 +107,10 @@ class ChecklistRepository(
    */
   val themeName: Flow<String?> = dataStore.data.map { it[Keys.THEME] }
 
+  /** Ids of the individually blocked surfaces, e.g. the Instagram Reels tab. */
+  val blockedSurfaces: Flow<Set<String>> =
+    dataStore.data.map { it[Keys.BLOCKED_SURFACES].orEmpty() }
+
   /** A manual immersion level override, or null for the automatic week-based ramp. */
   val immersionPin: Flow<String?> = dataStore.data.map { it[Keys.IMMERSION_PIN] }
 
@@ -134,6 +147,11 @@ class ChecklistRepository(
   /** Replaces the blocked-package list the future service will enforce. */
   suspend fun setBlockedPackages(packages: Set<String>) {
     dataStore.edit { prefs -> prefs[Keys.BLOCKED_PACKAGES] = packages }
+  }
+
+  /** Replaces the set of individually blocked surfaces. */
+  suspend fun setBlockedSurfaces(surfaceIds: Set<String>) {
+    dataStore.edit { prefs -> prefs[Keys.BLOCKED_SURFACES] = surfaceIds }
   }
 
   /** Persists the chosen theme. */

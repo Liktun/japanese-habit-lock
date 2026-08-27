@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Kept in its own file so the accessibility service description stays next to the
-  service that uses it and does not collide with the app's general strings.
+  Shown by Android on the accessibility settings screen, and the text a Play
+  reviewer reads. It must describe what the service ACTUALLY does. The previous
+  version said "only the package name", which stopped being true when surface
+  blocking landed.
 -->
 <resources>
-    <string name="accessibility_service_description">Japanese Habit Lock watches only which app is in the foreground. If you open an app you chose to block before finishing today\'s Japanese checklist, it shows a reminder screen instead. It never reads the contents of your screen, and Settings, your home screen and the phone app are always allowed.</string>
+    <string name="accessibility_service_description">Japanese Habit Lock uses the accessibility service to see which app is in front of you, and which screen inside it, so it can block a distraction before your study is done. To tell the Reels tab apart from a message, it reads the identifiers of the on-screen elements. It never reads their text: not your messages, not your posts, not anything you type. Nothing is stored and nothing leaves your phone - the app has no internet permission.</string>
 </resources>

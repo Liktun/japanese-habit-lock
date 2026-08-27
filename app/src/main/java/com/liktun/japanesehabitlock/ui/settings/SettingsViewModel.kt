@@ -7,6 +7,7 @@ import com.liktun.japanesehabitlock.data.apps.InstalledApp
 import com.liktun.japanesehabitlock.data.apps.InstalledAppsRepository
 import com.liktun.japanesehabitlock.service.HeartbeatStatus
 import com.liktun.japanesehabitlock.service.ServiceHeartbeat
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -62,11 +63,25 @@ class SettingsViewModel(
       }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeartbeatStatus.Disabled)
 
+  /**
+   * The two blocking rules as one value.
+   *
+   * `combine` only has typed overloads up to five flows and the chain below already uses
+   * all five. Pairing the two persisted rule sets keeps the result strongly typed instead
+   * of falling back to the vararg overload's `Array<Any?>` and casting.
+   */
+  private val blockRules: Flow<Pair<Set<String>, Set<String>>> =
+    combine(checklistRepository.blockedPackages, checklistRepository.blockedSurfaces) {
+      packages,
+      surfaces ->
+      packages to surfaces
+    }
+
   val uiState: StateFlow<SettingsUiState> =
-    combine(apps, loadFailure, checklistRepository.blockedPackages, searchQuery, health) {
+    combine(apps, loadFailure, blockRules, searchQuery, health) {
         loaded,
         failure,
-        blocked,
+        rules,
         query,
         status ->
         when {
@@ -75,7 +90,8 @@ class SettingsViewModel(
           else ->
             SettingsUiState.Ready(
               apps = loaded,
-              blockedPackages = blocked,
+              blockedPackages = rules.first,
+              blockedSurfaces = rules.second,
               searchQuery = query,
               health = status,
             )
@@ -90,6 +106,21 @@ class SettingsViewModel(
       val current = (uiState.value as? SettingsUiState.Ready)?.blockedPackages.orEmpty()
       val updated = if (blocked) current + packageName else current - packageName
       checklistRepository.setBlockedPackages(updated)
+    }
+  }
+
+  /**
+   * Adds or removes one surface id from the persisted blocked set.
+   *
+   * Deliberately independent of [setBlocked]: a surface rule that is currently superseded
+   * by an app block is still kept, so unblocking the app restores the narrower rule the
+   * user originally chose rather than silently discarding it.
+   */
+  fun setSurfaceBlocked(surfaceId: String, blocked: Boolean) {
+    viewModelScope.launch {
+      val current = (uiState.value as? SettingsUiState.Ready)?.blockedSurfaces.orEmpty()
+      val updated = if (blocked) current + surfaceId else current - surfaceId
+      checklistRepository.setBlockedSurfaces(updated)
     }
   }
 
@@ -108,6 +139,7 @@ sealed interface SettingsUiState {
     val blockedPackages: Set<String>,
     val searchQuery: String,
     val health: HeartbeatStatus = HeartbeatStatus.Disabled,
+    val blockedSurfaces: Set<String> = emptySet(),
   ) : SettingsUiState {
     /** The rows the picker actually renders. See [visibleApps] for the ordering rationale. */
     val visibleApps: List<InstalledApp> = visibleApps(apps, blockedPackages, searchQuery)

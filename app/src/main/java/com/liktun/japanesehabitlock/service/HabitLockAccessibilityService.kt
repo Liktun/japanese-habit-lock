@@ -6,6 +6,8 @@ import android.view.accessibility.AccessibilityEvent
 import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
 import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.surface.SurfaceMonitor
+import com.liktun.japanesehabitlock.domain.surface.SurfaceVerdict
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,8 +25,16 @@ import kotlinx.coroutines.launch
  */
 class HabitLockAccessibilityService : AccessibilityService() {
 
+  /**
+   * Decides both whole-app and surface-level blocks.
+   *
+   * [ForegroundAppMonitor] is gone from the event path: [SurfaceMonitor] subsumes it,
+   * enforcing the same always-allowed floor and study-tool exemption while also
+   * understanding surfaces. Keeping two monitors would mean two places for the floor
+   * to drift out of sync, which is exactly the rule that must never be wrong.
+   */
   private val monitor by lazy {
-    ForegroundAppMonitor(packageName, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
+    SurfaceMonitor(packageName, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
   }
 
   private var scope: CoroutineScope? = null
@@ -60,6 +70,9 @@ class HabitLockAccessibilityService : AccessibilityService() {
   @Volatile
   private var blockedPackages: Set<String> = emptySet()
 
+  @Volatile
+  private var blockedSurfaces: Set<String> = emptySet()
+
   override fun onServiceConnected() {
     super.onServiceConnected()
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { this.scope = it }
@@ -74,24 +87,61 @@ class HabitLockAccessibilityService : AccessibilityService() {
     // One collector for both flows: the two values are only ever read together, so a
     // single subscription keeps them consistent and halves the DataStore reads.
     scope.launch {
-      combine(repository.isUnlocked, repository.blockedPackages) { unlocked, packages ->
-        unlocked to packages
-      }.collect { (unlocked, packages) ->
+      combine(
+        repository.isUnlocked,
+        repository.blockedPackages,
+        repository.blockedSurfaces,
+      ) { unlocked, packages, surfaces ->
+        Triple(unlocked, packages, surfaces)
+      }.collect { (unlocked, packages, surfaces) ->
         isUnlocked = unlocked
         blockedPackages = packages
+        blockedSurfaces = surfaces
+        // Clear the debounce when the gate opens, so the very next block after the
+        // day resets fires instead of being swallowed as a repeat.
+        if (unlocked) monitor.reset()
       }
     }
   }
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+    if (event == null) return
+    val type = event.eventType
+    if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+      type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+    ) {
+      return
+    }
     // Proof of life, throttled. Every window change we handle is evidence the OS is still
     // delivering events to us, which is the only reliable signal that an OEM has not
     // silently reaped the process.
     recordHeartbeat(System.currentTimeMillis())
-    val foregroundPackage = event.packageName?.toString()
-    if (monitor.shouldLaunchBlocker(foregroundPackage, blockedPackages, isUnlocked)) {
-      launchBlocker()
+
+    val foregroundPackage = event.packageName?.toString() ?: return
+
+    // Reading the view tree is not free, so it is skipped entirely unless this package
+    // actually has a surface rule that could apply. For every other app the decision is
+    // still made from the package name alone, exactly as before.
+    val needsViewIds =
+      blockedSurfaces.isNotEmpty() &&
+        com.liktun.japanesehabitlock.domain.surface.KnownSurfaces
+          .forPackage(foregroundPackage)
+          .any { it.id in blockedSurfaces }
+
+    val viewIds = if (needsViewIds) ViewIdCollector.collect(rootInActiveWindow) else emptySet()
+
+    when (val verdict =
+      monitor.shouldLaunchBlocker(
+        foregroundPackage = foregroundPackage,
+        visibleViewIds = viewIds,
+        blockedPackages = blockedPackages,
+        blockedSurfaceIds = blockedSurfaces,
+        isUnlocked = isUnlocked,
+      )
+    ) {
+      is SurfaceVerdict.Allow -> Unit
+      is SurfaceVerdict.BlockApp -> launchBlocker(surfaceLabel = null)
+      is SurfaceVerdict.BlockSurface -> launchBlocker(surfaceLabel = verdict.surface.label)
     }
   }
 
@@ -119,9 +169,12 @@ class HabitLockAccessibilityService : AccessibilityService() {
    * The blocker Activity is referenced by name rather than by class literal so this
    * file compiles independently of the UI layer that owns it.
    */
-  private fun launchBlocker() {
+  private fun launchBlocker(surfaceLabel: String?) {
     val intent = Intent()
       .setClassName(packageName, BLOCKER_ACTIVITY)
+      // Lets the blocker say "Instagram Reels" rather than a generic message, so the
+      // user can see the surface rule fired rather than an app-wide block.
+      .putExtra(EXTRA_SURFACE_LABEL, surfaceLabel)
       // NEW_TASK is required to start an Activity from a Service; CLEAR_TASK stops a
       // stack of blocker instances building up behind the one the user can see.
       .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -150,6 +203,9 @@ class HabitLockAccessibilityService : AccessibilityService() {
 
   private companion object {
     const val BLOCKER_ACTIVITY = "com.liktun.japanesehabitlock.ui.blocker.BlockerActivity"
+
+    /** Intent extra naming the blocked surface, or absent for a whole-app block. */
+    const val EXTRA_SURFACE_LABEL = "surface_label"
 
     /**
      * Minimum gap between persisted heartbeats.

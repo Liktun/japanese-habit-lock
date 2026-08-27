@@ -38,6 +38,8 @@ import com.liktun.japanesehabitlock.data.apps.InstalledApp
 import com.liktun.japanesehabitlock.data.apps.InstalledAppsRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
 import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.surface.BlockableSurface
+import com.liktun.japanesehabitlock.domain.surface.KnownSurfaces
 import com.liktun.japanesehabitlock.service.AccessibilityServiceStatus
 import com.liktun.japanesehabitlock.service.HeartbeatStatus
 import com.liktun.japanesehabitlock.service.OemBatteryGuidance
@@ -119,6 +121,8 @@ fun SettingsScreen(
         guidance = guidance,
         onOpenBatterySettings = openBatterySettings,
         onOpenThemePicker = onOpenThemePicker,
+        blockedSurfaces = current.blockedSurfaces,
+        onToggleSurface = viewModel::setSurfaceBlocked,
         modifier = modifier,
       )
   }
@@ -146,6 +150,9 @@ internal fun SettingsContent(
   guidance: OemGuidance? = null,
   onOpenBatterySettings: () -> Unit = {},
   onOpenThemePicker: () -> Unit = {},
+  surfaces: List<BlockableSurface> = KnownSurfaces.ALL,
+  blockedSurfaces: Set<String> = emptySet(),
+  onToggleSurface: (String, Boolean) -> Unit = { _, _ -> },
 ) {
   LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { Header(onNavigateBack = onNavigateBack) }
@@ -166,6 +173,20 @@ internal fun SettingsContent(
     item { SectionLabel("Appearance") }
 
     item { ThemeRow(onOpenThemePicker) }
+
+    // Above the whole-app list on purpose: blocking one surface is the gentler answer to
+    // "Instagram is eating my day", and a user who sees it first is less likely to reach
+    // for the blunt instrument and then turn blocking off entirely.
+    item { SectionLabel("Block parts of apps") }
+
+    item {
+      SurfacePickerSection(
+        surfaces = surfaces,
+        blockedSurfaceIds = blockedSurfaces,
+        blockedPackages = blockedPackages,
+        onToggleSurface = onToggleSurface,
+      )
+    }
 
     item { SectionLabel("Blocked apps") }
 
@@ -242,9 +263,9 @@ internal fun ServiceStatusCard(serviceEnabled: Boolean, onOpenAccessibilitySetti
       if (serviceEnabled) {
         Text(
           text =
-            "The accessibility service is on. The apps you check below stay closed until " +
-              "today's required tasks are done. It still only reads the package name of the " +
-              "app in the foreground — never the contents of your screen.",
+            "The accessibility service is on. The apps and surfaces you pick below stay " +
+              "closed until today's required tasks are done. It sees which app is in front " +
+              "and which screen inside it — never the text on your screen.",
           style = MaterialTheme.typography.bodyMedium,
           color = onContainer,
         )
@@ -267,11 +288,14 @@ internal fun ServiceStatusCard(serviceEnabled: Boolean, onOpenAccessibilitySetti
             "Japanese Habit Lock uses Android's accessibility service to notice when an app " +
               "you chose comes to the foreground, and shows a blocking screen over it while " +
               "today's study is unfinished.\n\n" +
-              "It reads only one thing: the package name of the app currently in the " +
-              "foreground — for example \"com.instagram.android\". It does not read the text " +
-              "on your screen, your messages, your passwords, or anything you type. Nothing " +
-              "is sent off your device, and nothing is stored beyond the list of apps you " +
-              "pick here and today's checklist.\n\n" +
+              "It reads two things: which app is in front — for example " +
+              "\"com.instagram.android\" — and the identifiers of the elements on screen, " +
+              "such as \"clips_viewer\". Those identifiers are how it tells the Reels tab " +
+              "apart from a message, so it can block one without blocking the other.\n\n" +
+              "It does not read the text of those elements: not your messages, not your " +
+              "posts, not your passwords, not anything you type. Nothing is sent off your " +
+              "device — the app has no internet permission — and nothing is stored beyond " +
+              "the apps you pick here and today's checklist.\n\n" +
               "You can turn this off at any time in Android Settings › Accessibility.",
           style = MaterialTheme.typography.bodySmall,
           color = onContainer,
