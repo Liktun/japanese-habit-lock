@@ -126,17 +126,40 @@ class SurfaceMonitor(
      */
     val DIRECT_MESSAGE_CONTEXT: Set<String> =
       setOf(
+        // Being *inside* a conversation. Deliberately NOT a bare "direct_" prefix:
+        // Instagram's bottom nav carries a direct-messages button on every screen,
+        // including the Reels tab, so a loose marker matched everywhere and silently
+        // disabled blocking entirely. That was the first real-device failure.
         "direct_thread",
         "thread_message",
-        "message_list",
-        "direct_inbox",
-        "row_thread",
         "message_composer",
+        "row_thread",
         "direct_reply",
+        "message_list",
+        "thread_composer",
+        "direct_fragment_container",
+      )
+
+    /**
+     * Nav chrome that merely *links* to messages and must never count as being in a
+     * conversation. Checked first, so these can never trigger the exemption.
+     */
+    private val DM_NAV_CHROME: Set<String> =
+      setOf(
+        "direct_tab",
+        "action_bar_inbox",
+        "tab_icon",
+        "direct_button",
+        "inbox_button",
       )
 
     fun isDirectMessageContext(visibleViewIds: Set<String>): Boolean =
-      visibleViewIds.any { id -> DIRECT_MESSAGE_CONTEXT.any { id.contains(it, ignoreCase = true) } }
+      visibleViewIds.any { id ->
+        val short = id.substringAfter(":id/")
+        // Nav chrome first: a button that opens messages is not a conversation.
+        if (DM_NAV_CHROME.any { short.equals(it, ignoreCase = true) }) return@any false
+        DIRECT_MESSAGE_CONTEXT.any { short.contains(it, ignoreCase = true) }
+      }
   }
 }
 

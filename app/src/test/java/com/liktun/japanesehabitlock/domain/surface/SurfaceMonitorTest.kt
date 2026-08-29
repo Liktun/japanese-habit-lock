@@ -264,6 +264,73 @@ class DirectMessageContextTest {
   }
 }
 
+class RealDeviceRegressionTest {
+
+  private fun monitor() = SurfaceMonitor(SELF)
+
+  @Test
+  fun `the DM nav button does not exempt the reels tab`() {
+    // THE BUG that made this fail on a real phone. Instagram's bottom nav carries a
+    // direct-messages button on every screen, Reels included. The old marker list
+    // matched it, so isDirectMessageContext was true everywhere and nothing was ever
+    // blocked - the feature silently did nothing while appearing to be on.
+    val v =
+      monitor().verdict(
+        foregroundPackage = IG,
+        visibleViewIds = ig("clips_viewer", "direct_tab", "tab_icon"),
+        blockedPackages = emptySet(),
+        blockedSurfaceIds = REELS,
+        isUnlocked = false,
+      )
+    assertTrue("nav chrome must not exempt the Reels tab", v is SurfaceVerdict.BlockSurface)
+  }
+
+  @Test
+  fun `an actual conversation still exempts a shared reel`() {
+    // The other half: narrowing the markers must not break the behaviour the user
+    // explicitly asked to keep.
+    val v =
+      monitor().verdict(
+        foregroundPackage = IG,
+        visibleViewIds = ig("clips_viewer", "direct_thread", "message_composer"),
+        blockedPackages = emptySet(),
+        blockedSurfaceIds = REELS,
+        isUnlocked = false,
+      )
+    assertEquals(SurfaceVerdict.Allow, v)
+  }
+
+  @Test
+  fun `every known reels id spelling is detected`() {
+    // Instagram has renamed this surface repeatedly; a user's build could carry any of
+    // these. Missing all of them is what a redesign looks like, and is why the settings
+    // screen warns that detection can break.
+    listOf(
+        "clips_viewer",
+        "clips_tab_feed",
+        "reels_viewer",
+        "clips_video",
+        "reel_viewer",
+        "clips_swipe",
+        "clips_fragment",
+      )
+      .forEach { id ->
+        val v = monitor().verdict(IG, ig(id), emptySet(), REELS, false)
+        assertTrue("$id should be recognised as Reels", v is SurfaceVerdict.BlockSurface)
+      }
+  }
+
+  @Test
+  fun `ids are matched on the short form as well as the qualified form`() {
+    // uiautomator reports "com.instagram.android:id/clips_viewer" but a hand-entered
+    // rule may be the bare name. Both must work.
+    assertTrue(monitor().verdict(IG, setOf("clips_viewer"), emptySet(), REELS, false)
+      is SurfaceVerdict.BlockSurface)
+    assertTrue(monitor().verdict(IG, ig("clips_viewer"), emptySet(), REELS, false)
+      is SurfaceVerdict.BlockSurface)
+  }
+}
+
 class KnownSurfacesTest {
 
   @Test

@@ -61,6 +61,7 @@ fun SettingsScreen(
   serviceEnabled: Boolean = false,
   onOpenAccessibilitySettings: () -> Unit = {},
   onOpenThemePicker: () -> Unit = {},
+  onOpenDiagnostics: () -> Unit = {},
 ) {
   // applicationContext, not the Activity: the DataStore outlives this screen.
   val appContext = LocalContext.current.applicationContext
@@ -99,6 +100,7 @@ fun SettingsScreen(
         onNavigateBack = onNavigateBack,
         loading = true,
         onOpenThemePicker = onOpenThemePicker,
+        onOpenDiagnostics = onOpenDiagnostics,
         modifier = modifier,
       )
     is SettingsUiState.Error ->
@@ -121,6 +123,7 @@ fun SettingsScreen(
         guidance = guidance,
         onOpenBatterySettings = openBatterySettings,
         onOpenThemePicker = onOpenThemePicker,
+        onOpenDiagnostics = onOpenDiagnostics,
         blockedSurfaces = current.blockedSurfaces,
         onToggleSurface = viewModel::setSurfaceBlocked,
         modifier = modifier,
@@ -153,6 +156,7 @@ internal fun SettingsContent(
   surfaces: List<BlockableSurface> = KnownSurfaces.ALL,
   blockedSurfaces: Set<String> = emptySet(),
   onToggleSurface: (String, Boolean) -> Unit = { _, _ -> },
+  onOpenDiagnostics: () -> Unit = {},
 ) {
   LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { Header(onNavigateBack = onNavigateBack) }
@@ -186,6 +190,37 @@ internal fun SettingsContent(
         blockedPackages = blockedPackages,
         onToggleSurface = onToggleSurface,
       )
+    }
+
+    item {
+      // Surface(onClick=...) rather than Modifier.clickable: the modifier form did not
+      // reliably receive taps inside a LazyColumn item here, and a row that looks
+      // tappable but is not is worse than no row at all.
+      Surface(
+        onClick = onOpenDiagnostics,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+          Column(Modifier.weight(1f)) {
+            Text(
+              text = "Not blocking? Diagnose it",
+              style = MaterialTheme.typography.bodyLarge,
+              fontWeight = FontWeight.Medium,
+            )
+            Text(
+              text = "Record what the blocker sees, so a broken rule can be fixed.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          Text(text = "→", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+      }
     }
 
     item { SectionLabel("Blocked apps") }

@@ -57,8 +57,21 @@ object KnownSurfaces {
       packageName = INSTAGRAM,
       label = "Instagram Reels",
       detail = "The Reels tab only. DMs, your feed, stories and reels friends send you keep working.",
-      viewIdContains = setOf("clips_viewer", "clips_tab_feed", "reels_viewer"),
-      entryOnlyViewIds = setOf("clips_tab"),
+      // Several spellings because Instagram has renamed this surface repeatedly and
+      // the build a given user has is unknowable from here. Matching any one of them is
+      // enough; matching none is what a redesign looks like.
+      viewIdContains =
+        setOf(
+          "clips_viewer",
+          "clips_tab_feed",
+          "reels_viewer",
+          "clips_video",
+          "reel_viewer",
+          "clips_swipe",
+          "clips_fragment",
+          "reels_tray",
+        ),
+      entryOnlyViewIds = setOf("clips_tab", "tab_avatar_clips"),
     )
 
   /** Instagram Explore: the other infinite surface, offered separately. */
@@ -79,7 +92,15 @@ object KnownSurfaces {
       packageName = YOUTUBE,
       label = "YouTube Shorts",
       detail = "The Shorts player only. Search, subscriptions and normal videos keep working.",
-      viewIdContains = setOf("reel_recycler", "reel_watch", "shorts_container"),
+      viewIdContains =
+        setOf(
+          "reel_recycler",
+          "reel_watch",
+          "shorts_container",
+          "reel_player",
+          "shorts_video",
+          "reel_progress",
+        ),
       entryOnlyViewIds = setOf("shorts_tab", "pivot_shorts"),
     )
 

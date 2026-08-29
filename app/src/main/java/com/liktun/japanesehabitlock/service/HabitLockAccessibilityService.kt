@@ -128,7 +128,38 @@ class HabitLockAccessibilityService : AccessibilityService() {
           .forPackage(foregroundPackage)
           .any { it.id in blockedSurfaces }
 
-    val viewIds = if (needsViewIds) ViewIdCollector.collect(rootInActiveWindow) else emptySet()
+    // When diagnostics are on, read the tree for ANY app even without a rule: the whole
+    // point is to discover the ids a broken rule should have matched.
+    val viewIds =
+      if (needsViewIds || SurfaceDiagnostics.enabled) {
+        ViewIdCollector.collect(rootInActiveWindow)
+      } else {
+        emptySet()
+      }
+
+    // Recorded before the debounce, so a screen the user is already sitting on still
+    // shows up in the report rather than being swallowed as a repeat.
+    if (SurfaceDiagnostics.enabled) {
+      val plain =
+        monitor.verdict(
+          foregroundPackage = foregroundPackage,
+          visibleViewIds = viewIds,
+          blockedPackages = blockedPackages,
+          blockedSurfaceIds = blockedSurfaces,
+          isUnlocked = isUnlocked,
+        )
+      SurfaceDiagnostics.record(
+        packageName = foregroundPackage,
+        viewIds = viewIds,
+        verdict =
+          when (plain) {
+            is SurfaceVerdict.Allow ->
+              if (isUnlocked) "allowed (gate open)" else "allowed (no rule matched)"
+            is SurfaceVerdict.BlockApp -> "blocked (whole app)"
+            is SurfaceVerdict.BlockSurface -> "blocked (${plain.surface.label})"
+          },
+      )
+    }
 
     when (val verdict =
       monitor.shouldLaunchBlocker(

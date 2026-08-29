@@ -42,8 +42,8 @@ android {
         // versionCode is not greater than the installed one, so shipping a build with a
         // stale code fails as a confusing "app not installed" rather than an obvious
         // error. Play additionally rejects a re-used code outright.
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {

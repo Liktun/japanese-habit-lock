@@ -34,6 +34,7 @@ import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
 import com.liktun.japanesehabitlock.service.AccessibilityServiceStatus
 import com.liktun.japanesehabitlock.ui.checklist.ThemedChecklistScreen
+import com.liktun.japanesehabitlock.ui.settings.DiagnosticsScreen
 import com.liktun.japanesehabitlock.ui.settings.SettingsScreen
 import com.liktun.japanesehabitlock.ui.styles.ThemeRegistry
 import com.liktun.japanesehabitlock.ui.theme.ThemePickerScreen
@@ -97,6 +98,13 @@ fun MainNavigation() {
               serviceEnabled = serviceEnabled,
               onOpenAccessibilitySettings = { AccessibilityServiceStatus.openSettings(context) },
               onOpenThemePicker = { backStack.add(ThemePicker) },
+              onOpenDiagnostics = { backStack.add(Diagnostics) },
+              modifier = Modifier.safeDrawingPadding().padding(16.dp),
+            )
+          }
+          entry<Diagnostics> {
+            DiagnosticsScreen(
+              onNavigateBack = { backStack.removeLastOrNull() },
               modifier = Modifier.safeDrawingPadding().padding(16.dp),
             )
           }

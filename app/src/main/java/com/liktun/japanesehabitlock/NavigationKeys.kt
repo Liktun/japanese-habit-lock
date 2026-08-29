@@ -8,3 +8,5 @@ import kotlinx.serialization.Serializable
 @Serializable data object Settings : NavKey
 
 @Serializable data object ThemePicker : NavKey
+
+@Serializable data object Diagnostics : NavKey
