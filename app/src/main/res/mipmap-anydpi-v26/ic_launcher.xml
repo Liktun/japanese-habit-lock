@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon.
+
+  The foreground is a raster rather than a vector because the enso is a simulated
+  brushstroke with pressure variation and dry-brush texture - expressing that as vector
+  paths would be thousands of nodes for no gain at launcher sizes.
+
+  The monochrome layer is a SEPARATE single-colour silhouette. Android 13+ themed icons
+  tint this layer with the wallpaper palette and discard its own colours, so reusing the
+  full-colour foreground here renders as a featureless blob.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@drawable/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>
