@@ -6,42 +6,114 @@ import java.util.concurrent.ConcurrentHashMap
  * Records what the service actually saw on screen, so a failing rule can be diagnosed
  * from the user's own device.
  *
- * Surface detection depends on view ids that are internal to Instagram and YouTube and
- * cannot be verified anywhere except a real, logged-in install. Shipping a guess and
- * asking "did it work?" wastes a release cycle per attempt; this instead lets the phone
- * report the ids it really has.
+ * Surface detection depends on view ids internal to Instagram and YouTube, which cannot
+ * be verified from a build machine — there is no logged-in Instagram there. When a rule
+ * fails, the only source of truth is the user's phone.
  *
- * Deliberately small and bounded:
- *  - ids only, never text, exactly as [ViewIdCollector] already guarantees.
- *  - in memory only, cleared when the service restarts.
- *  - capped, so a long session cannot grow without limit.
- *  - off unless the user turns it on in settings.
+ * ## Why this is persisted rather than held in memory
+ *
+ * The diagnostic workflow is: turn recording on, LEAVE the app, use Instagram, come
+ * back. Instagram is memory-hungry, so Android frequently kills this app's process while
+ * the user is away. The accessibility service is then restarted by the system with fresh
+ * static state — which meant the enabled flag silently reverted to false and every
+ * captured id was lost, so the report was always empty. That is precisely the window the
+ * tool exists to observe, so both the flag and the captured ids must survive process
+ * death.
+ *
+ * Still narrow by construction:
+ *  - ids only, never text, exactly as [ViewIdCollector] guarantees.
+ *  - capped, so a long session cannot grow without bound.
+ *  - off unless the user turns it on, and cleared when they turn it off.
  */
 object SurfaceDiagnostics {
-
-  /** Off by default: this exists for debugging a broken rule, not for normal running. */
-  @Volatile
-  var enabled: Boolean = false
 
   private const val MAX_PACKAGES = 8
   private const val MAX_IDS_PER_PACKAGE = 300
 
-  private val seen = ConcurrentHashMap<String, MutableSet<String>>()
+  /**
+   * Mirror of the persisted flag, for the hot path.
+   *
+   * [record] is called on every accessibility event, so it must not touch disk to decide
+   * whether to do nothing. The store is the source of truth; this is the fast read.
+   */
+  @Volatile
+  var enabled: Boolean = false
+    private set
 
-  /** The last verdict reached per package, for showing why nothing was blocked. */
+  /** In-memory cache of what has been captured, backed by [store]. */
+  private val seen = ConcurrentHashMap<String, MutableSet<String>>()
   private val lastVerdict = ConcurrentHashMap<String, String>()
+
+  /**
+   * Where captures are persisted.
+   *
+   * An interface so this object keeps zero Android dependencies and stays unit-testable;
+   * the real implementation is backed by DataStore.
+   */
+  interface Store {
+    fun loadEnabled(): Boolean
+
+    fun saveEnabled(value: Boolean)
+
+    fun loadCaptures(): Map<String, Set<String>>
+
+    fun saveCaptures(captures: Map<String, Set<String>>)
+
+    fun loadVerdicts(): Map<String, String>
+
+    fun saveVerdicts(verdicts: Map<String, String>)
+  }
+
+  @Volatile
+  private var store: Store? = null
+
+  /**
+   * Attaches persistence and restores anything captured before the process died.
+   *
+   * Called from both the service and the UI, because either may be the first to start
+   * after a restart.
+   */
+  fun attach(store: Store) {
+    this.store = store
+    enabled = store.loadEnabled()
+    if (seen.isEmpty()) {
+      store.loadCaptures().forEach { (pkg, ids) ->
+        seen.getOrPut(pkg) { ConcurrentHashMap.newKeySet() }.addAll(ids)
+      }
+      lastVerdict.putAll(store.loadVerdicts())
+    }
+  }
+
+  fun setEnabled(value: Boolean) {
+    enabled = value
+    store?.saveEnabled(value)
+    if (!value) clear()
+  }
 
   fun record(packageName: String, viewIds: Set<String>, verdict: String) {
     if (!enabled) return
-    lastVerdict[packageName] = verdict
-    if (viewIds.isEmpty()) return
-    if (seen.size >= MAX_PACKAGES && !seen.containsKey(packageName)) return
-    val bucket = seen.getOrPut(packageName) { ConcurrentHashMap.newKeySet() }
-    if (bucket.size >= MAX_IDS_PER_PACKAGE) return
-    // Strip the package prefix: "com.instagram.android:id/clips_viewer" -> "clips_viewer".
-    // The prefix is noise once grouped by package, and the short form is what the rules
-    // actually match on.
-    viewIds.forEach { id -> bucket.add(id.substringAfter(":id/")) }
+    val verdictChanged = lastVerdict.put(packageName, verdict) != verdict
+    var added = false
+    if (viewIds.isNotEmpty() &&
+      !(seen.size >= MAX_PACKAGES && !seen.containsKey(packageName))
+    ) {
+      val bucket = seen.getOrPut(packageName) { ConcurrentHashMap.newKeySet() }
+      if (bucket.size < MAX_IDS_PER_PACKAGE) {
+        // "com.instagram.android:id/clips_viewer" -> "clips_viewer". The prefix is noise
+        // once grouped by package, and the short form is what the rules match on.
+        viewIds.forEach { id -> if (bucket.add(id.substringAfter(":id/"))) added = true }
+      }
+    }
+    // Written only when something actually changed. Persisting on every event would mean
+    // a DataStore write per window change, which would be a performance disaster on a
+    // feed the user is actively scrolling.
+    if (added || verdictChanged) flush()
+  }
+
+  private fun flush() {
+    val s = store ?: return
+    s.saveCaptures(seen.mapValues { it.value.toSet() })
+    s.saveVerdicts(lastVerdict.toMap())
   }
 
   fun packages(): List<String> = seen.keys.sorted()
@@ -53,18 +125,35 @@ object SurfaceDiagnostics {
   fun clear() {
     seen.clear()
     lastVerdict.clear()
+    store?.let {
+      it.saveCaptures(emptyMap())
+      it.saveVerdicts(emptyMap())
+    }
   }
 
   /**
-   * A shareable plain-text report.
+   * Drops in-memory state WITHOUT touching the store, simulating process death.
    *
-   * Formatted for pasting into a message, because that is how it gets back to whoever
-   * has to fix the rule.
+   * Exists so the persistence contract - the actual bug this class was rewritten for -
+   * can be tested without an emulator.
    */
+  internal fun clearInMemoryForTest() {
+    seen.clear()
+    lastVerdict.clear()
+    enabled = false
+    store = null
+  }
+
+  /** A shareable plain-text report, formatted for pasting into a message. */
   fun report(): String {
     if (seen.isEmpty()) {
-      return "No screens recorded yet.\n\nTurn this on, open the app you want to block " +
-        "(for example Instagram, then the Reels tab), then come back here."
+      return if (enabled) {
+        "Recording is ON, but nothing has been captured yet.\n\n" +
+          "Leave this app, open Instagram, go to the Reels tab and scroll for a few " +
+          "seconds, then come back here and tap Refresh."
+      } else {
+        "Recording is OFF.\n\nTurn it on above, then open the app you want to block."
+      }
     }
     return buildString {
       appendLine("Surface diagnostics")

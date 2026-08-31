@@ -75,6 +75,12 @@ class HabitLockAccessibilityService : AccessibilityService() {
 
   override fun onServiceConnected() {
     super.onServiceConnected()
+    // Attached first, synchronously: if the process was killed while the user was in
+    // Instagram, the system restarts this service with fresh static state, and the
+    // recording flag must be restored BEFORE the first event arrives. Otherwise the
+    // window the user turned recording on to observe is exactly the window that is
+    // missed.
+    SurfaceDiagnostics.attach(PrefsDiagnosticsStore(applicationContext))
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { this.scope = it }
     val repository = ChecklistRepository(applicationContext.habitLockDataStore).also {
       this.repository = it

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.liktun.japanesehabitlock.service.PrefsDiagnosticsStore
 import com.liktun.japanesehabitlock.service.SurfaceDiagnostics
 
 /**
@@ -45,8 +46,15 @@ import com.liktun.japanesehabitlock.service.SurfaceDiagnostics
 @Composable
 fun DiagnosticsScreen(onNavigateBack: () -> Unit, modifier: Modifier = Modifier) {
   val context = LocalContext.current
-  var enabled by remember { mutableStateOf(SurfaceDiagnostics.enabled) }
-  var report by remember { mutableStateOf(SurfaceDiagnostics.report()) }
+  // Attach before reading: the service may have captured ids in a previous process, and
+  // this screen must show them rather than an empty report.
+  val attached =
+    remember(context) {
+      SurfaceDiagnostics.attach(PrefsDiagnosticsStore(context.applicationContext))
+      true
+    }
+  var enabled by remember(attached) { mutableStateOf(SurfaceDiagnostics.enabled) }
+  var report by remember(attached) { mutableStateOf(SurfaceDiagnostics.report()) }
 
   Column(modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
     TextButton(onClick = onNavigateBack) { Text("← Back") }
@@ -80,8 +88,7 @@ fun DiagnosticsScreen(onNavigateBack: () -> Unit, modifier: Modifier = Modifier)
         checked = enabled,
         onCheckedChange = {
           enabled = it
-          SurfaceDiagnostics.enabled = it
-          if (!it) SurfaceDiagnostics.clear()
+          SurfaceDiagnostics.setEnabled(it)
           report = SurfaceDiagnostics.report()
         },
       )
