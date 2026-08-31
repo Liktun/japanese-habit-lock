@@ -20,6 +20,13 @@
   between tabs inside Instagram does not always produce a state change - without it,
   opening Reels from the home feed would go unnoticed.
 
+  flagReportViewIds is REQUIRED and its absence was a real shipped bug. Without it
+  Android returns null from getViewIdResourceName() for every node, even with
+  canRetrieveWindowContent granted - so the tree could be walked but every id came back
+  empty and no surface rule could ever match. The user's diagnostics report showed
+  exactly this: a verdict recorded for each app, and not a single view id under any of
+  them. canRetrieveWindowContent buys the tree; this flag buys the ids in it.
+
   There is still no android:isAccessibilityTool. This is a self-control tool, not an
   accessibility aid, and falsely declaring otherwise trips Play Protect's "Deceptive
   Accessibility Tool" warning.
@@ -27,6 +34,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:notificationTimeout="200"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description" />

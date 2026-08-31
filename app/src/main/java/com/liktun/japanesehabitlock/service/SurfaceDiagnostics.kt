@@ -147,6 +147,25 @@ object SurfaceDiagnostics {
   /** A shareable plain-text report, formatted for pasting into a message. */
   fun report(): String {
     if (seen.isEmpty()) {
+      // A verdict with no ids anywhere is a specific, diagnosable failure rather than
+      // "nothing happened": the service is receiving events and reading the tree, but
+      // every getViewIdResourceName() came back null. That is what FLAG_REPORT_VIEW_IDS
+      // being absent looks like from the outside, and saying so is far more useful than
+      // a generic empty report.
+      if (lastVerdict.isNotEmpty()) {
+        return buildString {
+          appendLine("Screens were seen, but NO view ids were readable.")
+          appendLine()
+          appendLine("Apps observed:")
+          lastVerdict.keys.sorted().forEach { appendLine("  $it  -> ${lastVerdict[it]}") }
+          appendLine()
+          appendLine(
+            "This means the accessibility service is running but Android is not " +
+              "reporting element ids to it. Turning the service off and on again in " +
+              "Android Settings > Accessibility usually fixes it after an update."
+          )
+        }
+      }
       return if (enabled) {
         "Recording is ON, but nothing has been captured yet.\n\n" +
           "Leave this app, open Instagram, go to the Reels tab and scroll for a few " +

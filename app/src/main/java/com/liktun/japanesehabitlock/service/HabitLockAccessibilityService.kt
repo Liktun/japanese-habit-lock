@@ -1,6 +1,7 @@
 package com.liktun.japanesehabitlock.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.liktun.japanesehabitlock.data.ChecklistRepository
@@ -81,6 +82,18 @@ class HabitLockAccessibilityService : AccessibilityService() {
     // window the user turned recording on to observe is exactly the window that is
     // missed.
     SurfaceDiagnostics.attach(PrefsDiagnosticsStore(applicationContext))
+
+    // Belt and braces on top of the XML config. FLAG_REPORT_VIEW_IDS is what makes
+    // getViewIdResourceName() return anything at all; without it every id is null and no
+    // surface rule can ever match, which is exactly how this shipped broken. Setting it
+    // here as well covers a service that was granted BEFORE this version was installed
+    // and would otherwise keep its old configuration until the user re-granted it.
+    serviceInfo =
+      (serviceInfo ?: AccessibilityServiceInfo()).apply {
+        flags = flags or
+          AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+          AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+      }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { this.scope = it }
     val repository = ChecklistRepository(applicationContext.habitLockDataStore).also {
       this.repository = it

@@ -126,6 +126,24 @@ class SurfaceDiagnosticsTest {
   }
 
   @Test
+  fun `a verdict with no ids reports the null-id failure specifically`() {
+    // THE SHIPPED BUG, as seen from the user's report: every app showed a verdict and
+    // not one view id. That is FLAG_REPORT_VIEW_IDS being absent - the service reads the
+    // tree fine but Android returns null for every getViewIdResourceName(). A generic
+    // "nothing captured" message sent the user looking in the wrong place.
+    SurfaceDiagnostics.setEnabled(true)
+    SurfaceDiagnostics.record("bunpro.jp.bunpro_srs", emptySet(), "allowed (no rule matched)")
+    SurfaceDiagnostics.record(IG, emptySet(), "allowed (no rule matched)")
+
+    val report = SurfaceDiagnostics.report()
+    assertTrue(report.contains("NO view ids were readable"))
+    assertTrue(report.contains("bunpro.jp.bunpro_srs"))
+    assertTrue(report.contains(IG))
+    // And it must tell the user what to actually do about it.
+    assertTrue(report.contains("Accessibility"))
+  }
+
+  @Test
   fun `duplicate ids are not written repeatedly`() {
     SurfaceDiagnostics.setEnabled(true)
     SurfaceDiagnostics.record(IG, setOf("$IG:id/clips_viewer"), "allowed")
