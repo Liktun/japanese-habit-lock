@@ -126,7 +126,10 @@ fun SurfacePickerSection(
     Text(
       text =
         "Surface blocking works by recognising each app's screen layout. When these apps " +
-          "ship a redesign it can stop working until the app is updated.",
+          "ship a redesign it can stop working until the app is updated. As a backstop, " +
+          "ticking any surface in an app also blocks that app after roughly a minute of " +
+          "continuous scrolling anywhere in it - so moving to an unnamed screen doesn't " +
+          "slip through.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
       modifier = Modifier.padding(top = 4.dp),

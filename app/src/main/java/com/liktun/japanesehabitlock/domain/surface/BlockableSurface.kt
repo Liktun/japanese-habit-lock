@@ -85,6 +85,33 @@ object KnownSurfaces {
       entryOnlyViewIds = setOf("search_tab"),
     )
 
+  /**
+   * Instagram's main Home feed.
+   *
+   * Added after a user reported that blocking Reels alone just moved the same
+   * compulsive scrolling to the Home feed instead - Instagram interleaves suggested
+   * and Reels-style content into the feed too, so it is functionally the same surface
+   * wearing a different name. This is the last of the three named Instagram surfaces;
+   * see [com.liktun.japanesehabitlock.domain.surface.ScrollGuard] for why naming
+   * individual surfaces is a losing game and what backs it up.
+   */
+  val INSTAGRAM_FEED =
+    BlockableSurface(
+      id = "instagram_feed",
+      packageName = INSTAGRAM,
+      label = "Instagram Feed",
+      detail = "The scrolling home feed only. DMs, your profile and Reels friends send you keep working.",
+      viewIdContains =
+        setOf(
+          "feed_recycler_view",
+          "feed_tab",
+          "main_feed",
+          "newsfeed_recycler",
+          "feed_timeline",
+        ),
+      entryOnlyViewIds = setOf("feed_tab_icon", "tab_bar_home"),
+    )
+
   /** YouTube Shorts, the same shape of problem in a different app. */
   val YOUTUBE_SHORTS =
     BlockableSurface(
@@ -105,7 +132,7 @@ object KnownSurfaces {
     )
 
   val ALL: List<BlockableSurface> =
-    listOf(INSTAGRAM_REELS, INSTAGRAM_EXPLORE, YOUTUBE_SHORTS)
+    listOf(INSTAGRAM_REELS, INSTAGRAM_EXPLORE, INSTAGRAM_FEED, YOUTUBE_SHORTS)
 
   fun byId(id: String): BlockableSurface? = ALL.firstOrNull { it.id == id }
 

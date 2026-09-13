@@ -27,12 +27,20 @@
   exactly this: a verdict recorded for each app, and not a single view id under any of
   them. canRetrieveWindowContent buys the tree; this flag buys the ids in it.
 
+  typeViewScrolled feeds ScrollGuard, the fallback that catches sustained scrolling on
+  ANY surface - including ones not individually named. Added after a user reported that
+  blocking Instagram Reels alone just moved the same compulsive scrolling to the plain
+  Home feed, whose view ids did not match any tracked surface. Omitting this event type
+  from the mask is the same class of silent failure as the missing flagReportViewIds
+  bug: the code compiles and looks correct, but the system never delivers the event at
+  all, so the feature does nothing and there is no error anywhere to find.
+
   There is still no android:isAccessibilityTool. This is a self-control tool, not an
   accessibility aid, and falsely declaring otherwise trips Play Protect's "Deceptive
   Accessibility Tool" warning.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:notificationTimeout="200"

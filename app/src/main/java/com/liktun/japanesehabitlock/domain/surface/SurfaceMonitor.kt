@@ -12,6 +12,18 @@ sealed interface SurfaceVerdict {
 
   /** Only this surface is blocked; the rest of the app stays usable. */
   data class BlockSurface(val surface: BlockableSurface) : SurfaceVerdict
+
+  /**
+   * Caught by [ScrollGuard] rather than a named surface: the user has been scrolling
+   * continuously in [packageName] for longer than the tool considers a normal check-in,
+   * even though no specific tracked surface matched.
+   *
+   * This exists because named surfaces are a losing game — see [ScrollGuard]'s KDoc.
+   * Only fires in an app where the user has already opted into surface blocking (i.e.
+   * they ticked at least one surface belonging to this package), so it never surprises
+   * someone who never asked this app to be restricted at all.
+   */
+  data class BlockSustainedScrolling(val packageName: String) : SurfaceVerdict
 }
 
 /**
@@ -38,9 +50,26 @@ sealed interface SurfaceVerdict {
 class SurfaceMonitor(
   private val selfPackage: String,
   private val neverBlockable: Set<String> = emptySet(),
+  /**
+   * Detects sustained scrolling as a fallback when no named surface matches. Optional
+   * because ScrollGuard needs live timestamps the pure [verdict] call does not have;
+   * the service feeds it separately via [onScrollEvent]. Null disables the fallback
+   * entirely, which is what every existing test that doesn't care about it uses.
+   */
+  private val scrollGuard: ScrollGuard? = null,
 ) {
 
   private var lastBlockedKey: String? = null
+
+  /**
+   * Feeds a scroll event to the underlying [ScrollGuard]. Call this from
+   * `TYPE_VIEW_SCROLLED`; [verdict] and [shouldLaunchBlocker] read the accumulated
+   * state but never advance the clock themselves, since they may be called from a
+   * different event type (or not at all, for a static screen).
+   */
+  fun onScrollEvent(packageName: String, nowMillis: Long) {
+    scrollGuard?.onScroll(packageName, nowMillis)
+  }
 
   /**
    * @param foregroundPackage the app in front, or null if unknown.
@@ -77,7 +106,20 @@ class SurfaceMonitor(
       KnownSurfaces.forPackage(foregroundPackage).firstOrNull { surface ->
         surface.id in blockedSurfaceIds && surface.matches(visibleViewIds)
       }
-    return if (hit != null) SurfaceVerdict.BlockSurface(hit) else SurfaceVerdict.Allow
+    if (hit != null) return SurfaceVerdict.BlockSurface(hit)
+
+    // Fallback: no named surface matched, but the user has opted into blocking SOME
+    // surface in this app and has been scrolling continuously well past a normal
+    // check-in. Gated on opt-in so this can never surprise someone who never asked
+    // this app to be restricted - it only tightens a rule already chosen, never adds
+    // a new one silently.
+    val hasOptedIntoThisApp =
+      KnownSurfaces.forPackage(foregroundPackage).any { it.id in blockedSurfaceIds }
+    if (hasOptedIntoThisApp && scrollGuard?.isSustainedScrolling(foregroundPackage) == true) {
+      return SurfaceVerdict.BlockSustainedScrolling(foregroundPackage)
+    }
+
+    return SurfaceVerdict.Allow
   }
 
   /**
@@ -100,6 +142,7 @@ class SurfaceMonitor(
         is SurfaceVerdict.Allow -> null
         is SurfaceVerdict.BlockApp -> "app:$foregroundPackage"
         is SurfaceVerdict.BlockSurface -> "surface:${verdict.surface.id}"
+        is SurfaceVerdict.BlockSustainedScrolling -> "scroll:${verdict.packageName}"
       }
     if (key == null) {
       lastBlockedKey = null
@@ -113,6 +156,7 @@ class SurfaceMonitor(
   /** Forgets the debounce state, e.g. when the gate opens. */
   fun reset() {
     lastBlockedKey = null
+    scrollGuard?.reset()
   }
 
   companion object {

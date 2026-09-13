@@ -7,6 +7,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.liktun.japanesehabitlock.data.ChecklistRepository
 import com.liktun.japanesehabitlock.data.habitLockDataStore
 import com.liktun.japanesehabitlock.domain.Roadmap
+import com.liktun.japanesehabitlock.domain.surface.ScrollGuard
 import com.liktun.japanesehabitlock.domain.surface.SurfaceMonitor
 import com.liktun.japanesehabitlock.domain.surface.SurfaceVerdict
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +36,11 @@ class HabitLockAccessibilityService : AccessibilityService() {
    * to drift out of sync, which is exactly the rule that must never be wrong.
    */
   private val monitor by lazy {
-    SurfaceMonitor(packageName, neverBlockable = Roadmap.STUDY_TOOL_PACKAGES)
+    SurfaceMonitor(
+      packageName,
+      neverBlockable = Roadmap.STUDY_TOOL_PACKAGES,
+      scrollGuard = ScrollGuard(),
+    )
   }
 
   private var scope: CoroutineScope? = null
@@ -93,6 +98,10 @@ class HabitLockAccessibilityService : AccessibilityService() {
         flags = flags or
           AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
           AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        // ScrollGuard's fallback needs scroll events delivered at all; without this
+        // in the runtime mask (mirroring the XML fix) a service granted before this
+        // version would silently never see TYPE_VIEW_SCROLLED until re-granted.
+        eventTypes = eventTypes or AccessibilityEvent.TYPE_VIEW_SCROLLED
       }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { this.scope = it }
     val repository = ChecklistRepository(applicationContext.habitLockDataStore).also {
@@ -126,8 +135,20 @@ class HabitLockAccessibilityService : AccessibilityService() {
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null) return
     val type = event.eventType
+
+    // Scroll events feed ScrollGuard's clock regardless of what else this event does.
+    // Fed unconditionally (not gated on blockedSurfaces, unlike the view-id read below)
+    // because the clock itself is cheap - it is one comparison and an add, nothing
+    // touches the view tree - and gating it would mean dwell time silently resets the
+    // moment someone unticks a surface mid-scroll, which is a confusing thing for a
+    // habit tool to do to itself.
+    if (type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+      event.packageName?.toString()?.let { pkg -> monitor.onScrollEvent(pkg, System.currentTimeMillis()) }
+    }
+
     if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-      type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+      type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+      type != AccessibilityEvent.TYPE_VIEW_SCROLLED
     ) {
       return
     }
@@ -176,6 +197,7 @@ class HabitLockAccessibilityService : AccessibilityService() {
               if (isUnlocked) "allowed (gate open)" else "allowed (no rule matched)"
             is SurfaceVerdict.BlockApp -> "blocked (whole app)"
             is SurfaceVerdict.BlockSurface -> "blocked (${plain.surface.label})"
+            is SurfaceVerdict.BlockSustainedScrolling -> "blocked (sustained scrolling)"
           },
       )
     }
@@ -192,6 +214,10 @@ class HabitLockAccessibilityService : AccessibilityService() {
       is SurfaceVerdict.Allow -> Unit
       is SurfaceVerdict.BlockApp -> launchBlocker(surfaceLabel = null)
       is SurfaceVerdict.BlockSurface -> launchBlocker(surfaceLabel = verdict.surface.label)
+      is SurfaceVerdict.BlockSustainedScrolling ->
+        // No named surface to point at - this fired on behaviour, not a screen id - so
+        // the blocker gets a generic label naming the mechanism instead of a screen.
+        launchBlocker(surfaceLabel = "Extended scrolling")
     }
   }
 
