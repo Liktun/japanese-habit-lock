@@ -91,18 +91,17 @@ class ScrollGuard(
 
   companion object {
     /**
-     * Long enough that a normal check-a-notification visit never trips it, short
-     * enough that it catches the session before it becomes an hour. Chosen as a
-     * starting point, not a measured optimum — worth making user-adjustable if it
-     * proves too sensitive or not sensitive enough in practice.
+     * Set by the user after living with 45s: short and strict on purpose. Paired
+     * with a 10s reset, reading slowly with occasional swipes still accumulates,
+     * so this catches browsing, not just flinging.
      */
-    const val DEFAULT_DWELL_THRESHOLD_MILLIS = 45_000L
+    const val DEFAULT_DWELL_THRESHOLD_MILLIS = 15_000L
 
     /**
-     * A pause shorter than this (reading a caption, a slow swipe) does not reset the
-     * clock. Longer than this, the user did something else, and that counts as
-     * success even if they come straight back.
+     * A pause shorter than this does not reset the clock - 10s (user-chosen) means
+     * a quick pause to read cannot be used to dodge the timer. Longer than this,
+     * the user genuinely stopped, and that counts as success.
      */
-    const val DEFAULT_IDLE_RESET_MILLIS = 4_000L
+    const val DEFAULT_IDLE_RESET_MILLIS = 10_000L
   }
 }

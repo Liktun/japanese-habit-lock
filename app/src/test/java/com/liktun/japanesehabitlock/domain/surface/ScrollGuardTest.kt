@@ -130,8 +130,27 @@ class ScrollGuardTest {
   }
 
   @Test
+  fun `real defaults - 15s of scrolling with 8s pauses still blocks`() {
+    val g = ScrollGuard()
+    var t = 0L
+    g.onScroll(IG, t)
+    repeat(2) { t += 8_000L; g.onScroll(IG, t) } // 16s, each gap under the 10s reset
+    assertTrue(g.isSustainedScrolling(IG))
+  }
+
+  @Test
+  fun `real defaults - a pause over 10s resets`() {
+    val g = ScrollGuard()
+    g.onScroll(IG, 0L)
+    g.onScroll(IG, 9_000L)
+    g.onScroll(IG, 20_000L) // 11s gap: reset
+    g.onScroll(IG, 25_000L)
+    assertFalse(g.isSustainedScrolling(IG))
+  }
+
+  @Test
   fun `default thresholds are sane`() {
-    assertEquals(45_000L, ScrollGuard.DEFAULT_DWELL_THRESHOLD_MILLIS)
-    assertEquals(4_000L, ScrollGuard.DEFAULT_IDLE_RESET_MILLIS)
+    assertEquals(15_000L, ScrollGuard.DEFAULT_DWELL_THRESHOLD_MILLIS)
+    assertEquals(10_000L, ScrollGuard.DEFAULT_IDLE_RESET_MILLIS)
   }
 }

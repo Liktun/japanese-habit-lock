@@ -109,7 +109,7 @@ object KnownSurfaces {
       id = "instagram_feed",
       packageName = INSTAGRAM,
       label = "Instagram Feed",
-      detail = "Blocks the home feed after about a minute of continuous scrolling. Opening Instagram and your DMs keep working.",
+      detail = "Blocks the home feed after about 15 seconds of scrolling. Opening Instagram and your DMs keep working.",
       blockOnSight = false,
       // "feed_tab" and "tab_bar_home" do NOT belong here: they are the Home tab
       // button in the bottom nav bar, visible on every screen of the app, not just
