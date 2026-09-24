@@ -159,6 +159,12 @@ class HabitLockAccessibilityService : AccessibilityService() {
 
     val foregroundPackage = event.packageName?.toString() ?: return
 
+    // STATE_CHANGED only: CONTENT_CHANGED fires constantly from systemui (the status
+    // bar clock), which would wipe a real scroll session every minute.
+    if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+      monitor.onForegroundChanged(foregroundPackage)
+    }
+
     // Reading the view tree is not free, so it is skipped entirely unless this package
     // actually has a surface rule that could apply. For every other app the decision is
     // still made from the package name alone, exactly as before.

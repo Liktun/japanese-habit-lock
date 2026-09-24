@@ -93,6 +93,65 @@ class SurfaceMonitorTest {
     assertEquals(SurfaceVerdict.Allow, v)
   }
 
+  @Test
+  fun `opening instagram at all does not block Feed - only the feed list itself does`() {
+    // THE REAL BUG: feed_tab is the Home tab BUTTON in the bottom nav bar, present on
+    // every screen of the app - the profile, DMs, settings, everywhere. Shipping it in
+    // viewIdContains meant Feed matched the instant Instagram opened, regardless of
+    // which screen was actually showing. Same class of bug as the DM nav-button
+    // exemption: a nav element mistaken for the surface it merely links to.
+    val v =
+      monitor().verdict(
+        foregroundPackage = IG,
+        // Landed on the profile tab; the Home button is still visible in the nav bar,
+        // but the feed list itself is not on screen.
+        visibleViewIds = ig("feed_tab", "profile_header", "tab_bar_home"),
+        blockedPackages = emptySet(),
+        blockedSurfaceIds = setOf("instagram_feed"),
+        isUnlocked = false,
+      )
+    assertEquals("the nav button alone must not trigger a Feed block", SurfaceVerdict.Allow, v)
+  }
+
+  @Test
+  fun `landing on the feed does not block - Instagram opens there`() {
+    // THE REPORTED BUG: Instagram opens on the Home feed, so an on-sight Feed rule
+    // blocked the app the moment it opened and DMs became unreachable.
+    val v =
+      monitor().verdict(
+        foregroundPackage = IG,
+        visibleViewIds = ig("feed_recycler_view", "feed_tab"),
+        blockedPackages = emptySet(),
+        blockedSurfaceIds = setOf("instagram_feed"),
+        isUnlocked = false,
+      )
+    assertEquals(SurfaceVerdict.Allow, v)
+  }
+
+  @Test
+  fun `sustained scrolling on the feed blocks it`() {
+    val guard = ScrollGuard(dwellThresholdMillis = 5_000L)
+    val m = SurfaceMonitor("com.liktun.japanesehabitlock", scrollGuard = guard)
+    var t = 0L
+    repeat(20) { guard.onScroll(IG, t); t += 500L }
+    val v = m.verdict(IG, ig("feed_recycler_view"), emptySet(), setOf("instagram_feed"), false)
+    assertTrue(v is SurfaceVerdict.BlockSurface)
+    assertEquals("instagram_feed", (v as SurfaceVerdict.BlockSurface).surface.id)
+  }
+
+  @Test
+  fun `leaving instagram ends the scroll session so reopening does not block`() {
+    // Stale dwell: after one long session, the next open blocked before any scroll.
+    val guard = ScrollGuard(dwellThresholdMillis = 5_000L)
+    val m = SurfaceMonitor("com.liktun.japanesehabitlock", scrollGuard = guard)
+    var t = 0L
+    repeat(20) { guard.onScroll(IG, t); t += 500L }
+    m.onForegroundChanged("com.liktun.japanesehabitlock") // the blocker / launcher
+    m.onForegroundChanged(IG) // reopen
+    val v = m.verdict(IG, ig("feed_recycler_view"), emptySet(), setOf("instagram_feed", "instagram_reels"), false)
+    assertEquals(SurfaceVerdict.Allow, v)
+  }
+
   // ── selection ─────────────────────────────────────────────────────────────────
 
   @Test

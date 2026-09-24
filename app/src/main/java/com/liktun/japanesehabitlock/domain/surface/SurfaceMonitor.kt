@@ -67,6 +67,16 @@ class SurfaceMonitor(
    * state but never advance the clock themselves, since they may be called from a
    * different event type (or not at all, for a static screen).
    */
+  /**
+   * Call when a different app comes to the front. Leaving an app (to the launcher,
+   * or to the blocker itself) must end its scroll session; otherwise dwell time from
+   * an earlier session survives, and the next time the app opens it is blocked
+   * before the user has scrolled at all.
+   */
+  fun onForegroundChanged(packageName: String?) {
+    scrollGuard?.onForegroundChanged(packageName)
+  }
+
   fun onScrollEvent(packageName: String, nowMillis: Long) {
     scrollGuard?.onScroll(packageName, nowMillis)
   }
@@ -106,7 +116,15 @@ class SurfaceMonitor(
       KnownSurfaces.forPackage(foregroundPackage).firstOrNull { surface ->
         surface.id in blockedSurfaceIds && surface.matches(visibleViewIds)
       }
-    if (hit != null) return SurfaceVerdict.BlockSurface(hit)
+    if (hit != null) {
+      if (hit.blockOnSight) return SurfaceVerdict.BlockSurface(hit)
+      // A landing surface (Instagram's feed): seeing it is normal and expected, only
+      // sustained scrolling on it counts.
+      if (scrollGuard?.isSustainedScrolling(foregroundPackage) == true) {
+        return SurfaceVerdict.BlockSurface(hit)
+      }
+      return SurfaceVerdict.Allow
+    }
 
     // Fallback: no named surface matched, but the user has opted into blocking SOME
     // surface in this app and has been scrolling continuously well past a normal

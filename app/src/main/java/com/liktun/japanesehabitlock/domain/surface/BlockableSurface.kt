@@ -26,6 +26,15 @@ data class BlockableSurface(
   val detail: String,
   val viewIdContains: Set<String>,
   val entryOnlyViewIds: Set<String> = emptySet(),
+  /**
+   * Whether seeing this surface is enough to block it.
+   *
+   * False for surfaces an app LANDS on. Instagram opens on the Home feed, so an
+   * on-sight Feed rule blocked Instagram the moment it opened and made DMs
+   * unreachable - the exact thing surface blocking exists to protect. Such a surface
+   * only blocks once ScrollGuard sees sustained scrolling on it.
+   */
+  val blockOnSight: Boolean = true,
 )
 
 /**
@@ -100,16 +109,22 @@ object KnownSurfaces {
       id = "instagram_feed",
       packageName = INSTAGRAM,
       label = "Instagram Feed",
-      detail = "The scrolling home feed only. DMs, your profile and Reels friends send you keep working.",
+      detail = "Blocks the home feed after about a minute of continuous scrolling. Opening Instagram and your DMs keep working.",
+      blockOnSight = false,
+      // "feed_tab" and "tab_bar_home" do NOT belong here: they are the Home tab
+      // button in the bottom nav bar, visible on every screen of the app, not just
+      // the feed. Shipping them in viewIdContains blocked Instagram on open
+      // regardless of which screen the user landed on - the same class of bug as
+      // the direct-message nav button that once disabled Reels blocking entirely.
+      // Only ids that mean the feed's scrolling list ITSELF is on screen belong here.
       viewIdContains =
         setOf(
           "feed_recycler_view",
-          "feed_tab",
           "main_feed",
           "newsfeed_recycler",
           "feed_timeline",
         ),
-      entryOnlyViewIds = setOf("feed_tab_icon", "tab_bar_home"),
+      entryOnlyViewIds = setOf("feed_tab", "feed_tab_icon", "tab_bar_home"),
     )
 
   /** YouTube Shorts, the same shape of problem in a different app. */
